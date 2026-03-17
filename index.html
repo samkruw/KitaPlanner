@@ -869,11 +869,11 @@ window._druckRechnung = (id) => {
     .invoice   { page-break-after: avoid; }
     .qr-slip   { page-break-inside: avoid; }
   }
-</style>
-</head>
+<\/style>
+<\/head>
 <body>
 
-<!-- ══ RECHNUNG ══════════════════════════════════════════ -->
+<\!-- ══ RECHNUNG ══════════════════════════════════════════ -\->
 <div class="invoice">
 
   <div class="inv-header">
@@ -936,14 +936,14 @@ window._druckRechnung = (id) => {
 
 </div>
 
-<!-- Trennlinie -->
+<\!-- Trennlinie -\->
 <hr class="cut-line"/>
 <p class="cut-label">✂ &nbsp; Einzahlungsschein / Bulletin de versement / Polizza di versamento</p>
 
-<!-- ══ QR-RECHNUNG (SIX Swiss Payments Standard) ════════ -->
+<\!-- ══ QR-RECHNUNG (SIX Swiss Payments Standard) ════════ -\->
 <div class="qr-slip">
 
-  <!-- Empfangsschein -->
+  <\!-- Empfangsschein -\->
   <div class="qr-receipt">
     <div class="qr-receipt-title">Empfangsschein</div>
 
@@ -966,7 +966,7 @@ window._druckRechnung = (id) => {
     <div class="qr-accept">Annahmestelle</div>
   </div>
 
-  <!-- Zahlteil -->
+  <\!-- Zahlteil -\->
   <div class="qr-payment">
     <div class="qr-payment-title">Zahlteil</div>
 
@@ -1011,12 +1011,12 @@ window._druckRechnung = (id) => {
   </div>
 </div>
 
-<script>window.onload = () => { window.print(); }</script>
-</body></html>`;
+<\/body><\/html>`;
 
   const w = window.open("", "_blank");
   w.document.write(html);
   w.document.close();
+  setTimeout(() => { try { w.print(); } catch(e) {} }, 800);
 };
 
 window._alleRechnungenDrucken = () => {
@@ -1039,17 +1039,18 @@ window._alleRechnungenDrucken = () => {
   th{background:#F4F6FA;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#666;border-bottom:2px solid #E2E6EC}
   td{padding:8px 10px;border-bottom:1px solid #E2E6EC}
   tfoot td{font-weight:900;background:#EBF0FB;color:#1A56C4}
-  </style></head><body>
+  <\/style><\/head><body>
   <h1>🏡 KitaPlaner — Rechnungsübersicht</h1>
   <p style="color:#888;font-size:11px">Erstellt am ${new Date().toLocaleDateString("de-CH")} · ${liste.length} Rechnungen</p>
   <table><thead><tr>${["Nr.","Kind","Datum","Fällig","Betrag","MWST","Status"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
   <tbody>${rows}</tbody>
   <tfoot><tr><td colspan="4"><strong>Total</strong></td><td style="text-align:right"><strong>CHF ${total.toLocaleString("de-CH",{minimumFractionDigits:2})}</strong></td><td colspan="2"></td></tr></tfoot>
   </table>
-  <script>window.onload=()=>window.print();</script></body></html>`;
+  <\/body><\/html>`;
   const w = window.open("","_blank");
   w.document.write(html);
   w.document.close();
+  setTimeout(() => { try { w.print(); } catch(e) {} }, 600);
 };
 
 window._openKitaSettings = () => {
@@ -1071,6 +1072,8 @@ window._saveKitaSettings = () => {
   closeModal("kitaSettingsModal");
   alert("Einstellungen gespeichert ✅ (gilt für diese Sitzung — dauerhaft direkt im Code eintragen)");
 };
+
+window._openRechModal = (id) => {
   const r = id ? rechnungen.find(x=>x.id===id) : null;
   const f = r || { nr:"", kindId:"", betrag:0, datum:"", faellig:"", mwst:8.1, status:"offen", bemerkung:"" };
   document.getElementById("rechModalTitle").textContent = r ? "Rechnung bearbeiten" : "Neue Rechnung";
