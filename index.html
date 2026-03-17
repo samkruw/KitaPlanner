@@ -19,12 +19,12 @@ import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, s
 // 🔧 FIREBASE CONFIG — hier deine Werte eintragen
 // ─────────────────────────────────────────────────────────────
 const firebaseConfig = {
-  apiKey: "AIzaSyDmVjoz-UrRntxFyXuaYcGLtdTbN5INoqc",
-  authDomain: "kitaplanner-f4904.firebaseapp.com",
-  projectId: "kitaplanner-f4904",
-  storageBucket: "kitaplanner-f4904.firebasestorage.app",
+  apiKey:            "AIzaSyDmVjoz-UrRntxFyXuaYcGLtdTbN5INoqc",
+  authDomain:        "kitaplanner-f4904.firebaseapp.com",
+  projectId:         "kitaplanner-f4904",
+  storageBucket:     "kitaplanner-f4904.firebasestorage.app",
   messagingSenderId: "481955019001",
-  appId: "1:481955019001:web:27052ed673ee22d47f0a28"
+  appId:             "1:481955019001:web:27052ed673ee22d47f0a28"
 };
 // ─────────────────────────────────────────────────────────────
 
@@ -49,9 +49,11 @@ let unsubDienst = null;
 let unsubWarte  = null;
 let unsubFerien = null;
 let unsubDoku   = null;
+let unsubMitarb = null;
 let warteliste  = [];
 let ferien      = [];
 let dokumente   = [];
+let mitarbeiter = [];
 
 const DEFAULT_TARIFE = [
   { id: "A", name: "Basis",    preis: 85,  beschr: "2–3 Tage/Woche" },
@@ -79,7 +81,7 @@ window._login = async () => {
 };
 
 window._logout = async () => {
-  [unsubKinder, unsubTarife, unsubAnw, unsubRech, unsubNachr, unsubDienst, unsubWarte, unsubFerien, unsubDoku].forEach(u => u && u());
+  [unsubKinder, unsubTarife, unsubAnw, unsubRech, unsubNachr, unsubDienst, unsubWarte, unsubFerien, unsubDoku, unsubMitarb].forEach(u => u && u());
   await signOut(auth);
 };
 
@@ -135,6 +137,11 @@ function subscribeData() {
 
   unsubDoku = onSnapshot(collection(db, "kunden", uid, "dokumente"), snap => {
     dokumente = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  });
+
+  unsubMitarb = onSnapshot(collection(db, "kunden", uid, "mitarbeiter"), snap => {
+    mitarbeiter = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderAll();
   });
 }
@@ -312,6 +319,7 @@ function renderAll() {
   else if (activeTab === "rechnung")      c.innerHTML = renderRechnung();
   else if (activeTab === "kommunikation") c.innerHTML = renderKommunikation();
   else if (activeTab === "dienstplan")    c.innerHTML = renderDienstplan();
+  else if (activeTab === "mitarbeiter")   c.innerHTML = renderMitarbeiter();
   else if (activeTab === "warteliste")    c.innerHTML = renderWarteliste();
   else if (activeTab === "ferien")        c.innerHTML = renderFerien();
   else if (activeTab === "dokumente")     c.innerHTML = renderDokumente();
@@ -322,45 +330,65 @@ function renderAll() {
 
 function renderTabNav() {
   const groups = [
-    { label:"Kinder",    tabs:[
-      { id:"belegung",      icon:"👶", label:"Belegung"      },
-      { id:"warteliste",    icon:"⏳", label:"Warteliste"    },
-      { id:"dokumente",     icon:"📁", label:"Dokumente"     },
-      { id:"anwesenheit",   icon:"✅", label:"Anwesenheit"   },
+    { label:"Kinder", tabs:[
+      { id:"belegung",      icon:"👶", label:"Belegungsliste"  },
+      { id:"warteliste",    icon:"⏳", label:"Warteliste"      },
+      { id:"anwesenheit",   icon:"✅", label:"Anwesenheit"     },
+      { id:"dokumente",     icon:"📁", label:"Dokumente"       },
     ]},
-    { label:"Personal",  tabs:[
-      { id:"dienstplan",    icon:"📅", label:"Dienstplan"    },
-      { id:"ferien",        icon:"🏖️", label:"Ferienplan"    },
+    { label:"Personal", tabs:[
+      { id:"mitarbeiter",   icon:"👤", label:"Mitarbeiter"    },
+      { id:"dienstplan",    icon:"📅", label:"Dienstplan"      },
+      { id:"ferien",        icon:"🏖️", label:"Ferienplan"      },
     ]},
-    { label:"Finanzen",  tabs:[
-      { id:"rechnung",      icon:"🧾", label:"Rechnungen"    },
-      { id:"mahnwesen",     icon:"⚠️", label:"Mahnwesen"     },
-      { id:"beitragsrechner",icon:"🧮",label:"Beitragsrechner"},
-      { id:"jahresabschluss",icon:"📊",label:"Jahresabschluss"},
+    { label:"Finanzen", tabs:[
+      { id:"rechnung",      icon:"🧾", label:"Rechnungen"      },
+      { id:"mahnwesen",     icon:"⚠️", label:"Mahnwesen"       },
+      { id:"beitragsrechner",icon:"🧮",label:"Beitragsrechner" },
+      { id:"jahresabschluss",icon:"📊",label:"Jahresabschluss" },
     ]},
-    { label:"Planung",   tabs:[
-      { id:"kommunikation", icon:"✉️", label:"Kommunikation" },
-      { id:"forecast",      icon:"📈", label:"Forecast"      },
-      { id:"subv",          icon:"🏛️", label:"Subventionen"  },
+    { label:"Planung", tabs:[
+      { id:"kommunikation", icon:"✉️", label:"Kommunikation"   },
+      { id:"forecast",      icon:"📈", label:"Forecast"        },
+      { id:"subv",          icon:"🏛️", label:"Subventionen"    },
     ]},
   ];
-  document.getElementById("tabNav").innerHTML = groups.map(g =>
-    g.tabs.map(t =>
-      `<button class="tab-btn ${activeTab===t.id?'active':''}" onclick="_setTab('${t.id}')">${t.icon} ${t.label}</button>`
-    ).join("")
-  ).join('<span class="tab-sep">|</span>');
+
+  const navEl = document.getElementById("sidebarNav");
+  if (!navEl) return;
+
+  const ueberfaellig = rechnungen.filter(r => r.status==="offen" && r.faellig && r.faellig < new Date().toISOString().slice(0,10)).length;
+
+  navEl.innerHTML = groups.map(g => `
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">${g.label}</div>
+      ${g.tabs.map(t => {
+        const badge = t.id==="mahnwesen" && ueberfaellig>0 ? `<span class="nav-badge">${ueberfaellig}</span>` :
+                      t.id==="warteliste" && warteliste.length>0 ? `<span class="nav-badge">${warteliste.length}</span>` : "";
+        return `<button class="nav-btn ${activeTab===t.id?'active':''}" onclick="_setTab('${t.id}')">
+          <span class="nav-icon">${t.icon}</span>${t.label}${badge}
+        </button>`;
+      }).join("")}
+    </div>`).join("");
+
+  // update topbar title
+  const allTabs = groups.flatMap(g=>g.tabs);
+  const current = allTabs.find(t=>t.id===activeTab);
+  const titleEl = document.getElementById("topbarTitle");
+  if (titleEl && current) titleEl.textContent = current.icon + " " + current.label;
 }
 
 function renderStats() {
-  const total = kinder.length;
-  const subv  = subvList().length;
-  const ausl  = Math.round((total / 20) * 100);
-  const umsatz= Math.round(totalUmsatz());
-  document.getElementById("statBar").innerHTML = `
-    <div class="stat-item"><span class="stat-icon">👶</span><span class="stat-label">Kinder</span><strong>${total}</strong></div>
-    <div class="stat-item"><span class="stat-icon">🏛️</span><span class="stat-label">Subventioniert</span><strong>${subv}</strong></div>
-    <div class="stat-item"><span class="stat-icon">📊</span><span class="stat-label">Auslastung</span><strong class="${ausl>80?'green':ausl>60?'amber':'red'}">${ausl}%</strong></div>
-    <div class="stat-item"><span class="stat-icon">💰</span><span class="stat-label">Umsatz/Mt.</span><strong>CHF ${umsatz.toLocaleString("de-CH")}</strong></div>
+  const total  = kinder.length;
+  const subv   = subvList().length;
+  const ausl   = Math.round((total/20)*100);
+  const umsatz = Math.round(totalUmsatz());
+  const statEl = document.getElementById("statBar");
+  if (!statEl) return;
+  statEl.innerHTML = `
+    <div class="ts-item"><span class="ts-label">Kinder</span><span class="ts-val">${total}</span></div>
+    <div class="ts-item"><span class="ts-label">Auslastung</span><span class="ts-val" style="color:${ausl>80?'var(--green)':ausl>60?'var(--amber)':'var(--red)'}">${ausl}%</span></div>
+    <div class="ts-item"><span class="ts-label">Umsatz/Mt.</span><span class="ts-val" style="color:var(--green)">CHF ${umsatz.toLocaleString("de-CH")}</span></div>
   `;
 }
 
@@ -640,6 +668,7 @@ function renderRechnung() {
           <button class="btn-sm ${r.status==="bezahlt"?'danger':'success'}" onclick="_toggleRechStatus('${r.id}','${r.status}')">
             ${r.status==="bezahlt"?"↩ Offen":"✅ Bezahlt"}
           </button>
+          <button class="btn-icon" title="Drucken / PDF" onclick="_druckRechnung('${r.id}')">🖨️</button>
           <button class="btn-icon" onclick="_openRechModal('${r.id}')">✏️</button>
           <button class="btn-icon danger" onclick="_deleteRechnung('${r.id}')">🗑</button>
         </div>
@@ -656,6 +685,8 @@ function renderRechnung() {
   <div class="toolbar">
     <button class="btn-primary" onclick="_openRechModal()">+ Rechnung erstellen</button>
     <button class="btn-secondary" onclick="_autoRechnungen()">⚡ Auto-Rechnungen generieren</button>
+    <button class="btn-secondary" onclick="_alleRechnungenDrucken()">🖨️ Alle drucken</button>
+    <button class="btn-secondary" onclick="_openKitaSettings()">⚙️ Kita-Einstellungen</button>
   </div>
   <div class="card table-wrap">
     <table><thead><tr>${["Nr.","Kind","Datum","Fällig","Betrag","MWST","Status","Aktion"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
@@ -663,7 +694,383 @@ function renderRechnung() {
   </div>`;
 }
 
-window._openRechModal = (id) => {
+// ── QR-RECHNUNG (Schweizer Standard SIX) ──────────────────
+// Kita-Einstellungen — hier IBAN und Adresse eintragen
+const KITA_SETTINGS = {
+  name:    "Kita Sonnenschein",
+  strasse: "Musterstrasse 1",
+  plz:     "8302",
+  ort:     "Kloten",
+  iban:    "CH56 0483 5012 3456 7800 9", // ← eigene IBAN eintragen
+  uid:     "CHE-123.456.789 MWST",
+};
+
+// QR-Code via Google Charts API (keine externe Lib nötig)
+function qrUrl(data) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=166x166&ecc=M&data=${encodeURIComponent(data)}`;
+}
+
+// Swiss QR-Code Payload (SIX-Standard)
+function buildSwissQR(r, kita) {
+  const betrag = (r.betrag||0).toFixed(2);
+  const ibanClean = kita.iban.replace(/\s/g,"");
+  const ref = (r.nr||"").replace(/\D/g,"").padStart(27,"0"); // numerische Referenz
+  // Empfänger (Kita)
+  const lines = [
+    "SPC",           // QR Type
+    "0200",          // Version
+    "1",             // Coding
+    ibanClean,       // IBAN
+    "K",             // Adresstyp Kita
+    kita.name,       // Name
+    kita.strasse,    // Strasse
+    `${kita.plz} ${kita.ort}`, // PLZ Ort
+    "",              // PLZ (leer bei K)
+    "",              // Ort (leer bei K)
+    "CH",            // Land
+    "",              // Zust. Adresstyp
+    "",              // Zust. Name
+    "",              // Zust. Str
+    "",              // Zust. Nr
+    "",              // Zust. PLZ
+    "",              // Zust. Ort
+    "",              // Zust. Land
+    betrag,          // Betrag
+    "CHF",           // Währung
+    "K",             // Adresstyp Empfänger
+    r.kindName||"",  // Empfänger Name
+    "",              // Str
+    "",              // Nr
+    "",              // PLZ Ort
+    "",              // PLZ
+    "",              // Ort
+    "CH",            // Land
+    "QRR",           // Referenztyp
+    ref,             // Referenz
+    r.bemerkung||"Betreuungsleistungen", // Mitteilung
+    "EPD",           // Trailer
+    "",              // Alt-Schema 1
+    "",              // Alt-Schema 2
+  ];
+  return lines.join("\n");
+}
+
+window._druckRechnung = (id) => {
+  const r = rechnungen.find(x=>x.id===id);
+  if (!r) return;
+
+  const betrag     = r.betrag || 0;
+  const mwstSatz   = r.mwst || 8.1;
+  const mwstBetrag = (betrag * mwstSatz / (100 + mwstSatz));
+  const netto      = betrag - mwstBetrag;
+  const fmt2       = n => Number(n).toLocaleString("de-CH",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const qrPayload  = buildSwissQR(r, KITA_SETTINGS);
+  const qrSrc      = qrUrl(qrPayload);
+  const ibanFmt    = KITA_SETTINGS.iban;
+  const refFmt     = (r.nr||"").replace(/\D/g,"").padStart(27,"0").replace(/(\d{2})(\d{5})(\d{5})(\d{5})(\d{5})(\d{5})/,"$1 $2 $3 $4 $5 $6");
+
+  const html = `<!DOCTYPE html>
+<html lang="de"><head><meta charset="UTF-8"/>
+<title>Rechnung ${r.nr||""} — ${r.kindName||""}</title>
+<style>
+  @page { size: 210mm 297mm; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 10pt; color: #000; background: white; }
+
+  /* ── RECHNUNGSTEIL (obere ~240mm) ── */
+  .invoice { padding: 18mm 20mm 10mm; min-height: 190mm; }
+
+  .inv-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12mm; }
+  .inv-logo   { font-size: 18pt; font-weight: 900; color: #1A56C4; line-height: 1; }
+  .inv-logo-sub { font-size: 8pt; color: #888; margin-top: 2px; }
+  .inv-logo-addr { font-size: 8pt; color: #555; margin-top: 6px; line-height: 1.5; }
+  .inv-rechnungnr { text-align: right; }
+  .inv-rechnungnr h1 { font-size: 22pt; font-weight: 900; color: #1A56C4; }
+  .inv-rechnungnr p  { font-size: 9pt; color: #888; margin-top: 2px; }
+  .inv-status { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 3px; font-size: 8pt; font-weight: 700;
+    background: ${r.status==="bezahlt"?"#DCFCE7":"#FEE2E2"}; color: ${r.status==="bezahlt"?"#166534":"#DC2626"}; }
+
+  .inv-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; margin-bottom: 10mm; }
+  .inv-meta-block h3 { font-size: 7pt; text-transform: uppercase; letter-spacing: 1px; color: #999; margin-bottom: 3mm; }
+  .inv-meta-block p  { font-size: 9.5pt; line-height: 1.5; }
+
+  .inv-table { width: 100%; border-collapse: collapse; margin-bottom: 6mm; font-size: 9.5pt; }
+  .inv-table thead tr { background: #F4F6FA; border-bottom: 1.5pt solid #1A56C4; }
+  .inv-table th { padding: 3mm 4mm; text-align: left; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .5px; color: #666; }
+  .inv-table th:last-child { text-align: right; }
+  .inv-table td { padding: 3mm 4mm; border-bottom: .5pt solid #E2E6EC; }
+  .inv-table td:last-child { text-align: right; }
+
+  .inv-totals { margin-left: auto; width: 68mm; font-size: 9.5pt; border-top: .5pt solid #E2E6EC; }
+  .inv-total-row { display: flex; justify-content: space-between; padding: 1.5mm 0; }
+  .inv-total-row.bold { font-weight: 700; font-size: 11pt; color: #1A56C4; border-top: 1.5pt solid #1A56C4; padding-top: 2.5mm; margin-top: 1mm; }
+
+  /* ── TRENNLINIE ── */
+  .cut-line {
+    border: none; border-top: .75pt dashed #aaa;
+    margin: 0 20mm;
+    position: relative;
+  }
+  .cut-label {
+    text-align: center; font-size: 7pt; color: #aaa;
+    margin: 1mm 0 0;
+    letter-spacing: .5px;
+  }
+
+  /* ── QR-RECHNUNG (untere 105mm, SIX-Standard) ── */
+  .qr-slip {
+    height: 105mm;
+    display: flex;
+    border-top: .75pt solid #000;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    page-break-inside: avoid;
+  }
+
+  /* Empfangsschein — 52mm */
+  .qr-receipt {
+    width: 52mm;
+    min-width: 52mm;
+    border-right: .75pt solid #000;
+    padding: 5mm 5mm 5mm 5mm;
+    display: flex;
+    flex-direction: column;
+    font-size: 6pt;
+  }
+  .qr-receipt-title { font-size: 11pt; font-weight: 900; margin-bottom: 3mm; }
+  .qr-r-label { font-size: 6pt; font-weight: 700; margin-top: 2.5mm; margin-bottom: .5mm; }
+  .qr-r-val   { font-size: 8pt; line-height: 1.4; }
+  .qr-receipt-amount { margin-top: auto; }
+  .qr-accept  { font-size: 8pt; font-weight: 700; margin-top: auto; text-align: right; padding-top: 4mm; }
+
+  /* Zahlteil — 148mm */
+  .qr-payment {
+    flex: 1;
+    padding: 5mm 5mm 5mm 8mm;
+    display: grid;
+    grid-template-columns: 51mm 1fr;
+    grid-template-rows: auto auto 1fr auto;
+    gap: 0;
+    font-size: 8pt;
+  }
+  .qr-payment-title { font-size: 11pt; font-weight: 900; grid-column: 1/-1; margin-bottom: 3mm; }
+  .qr-left  { grid-column: 1; padding-right: 5mm; }
+  .qr-right { grid-column: 2; }
+  .qr-img   { width: 42mm; height: 42mm; display: block; margin-bottom: 3mm; }
+  .qr-scissors { font-size: 14pt; position: absolute; left: 50%; margin-top: -7pt; color: #aaa; }
+  .qr-label { font-size: 6pt; font-weight: 700; margin-top: 2.5mm; margin-bottom: .5mm; }
+  .qr-val   { font-size: 9pt; line-height: 1.4; }
+  .qr-amount-box { grid-column: 1/-1; display: flex; gap: 8mm; align-items: flex-end; margin-top: 2mm; }
+  .qr-amount-large { font-size: 14pt; font-weight: 900; }
+  .qr-corner { width: 42mm; height: 20mm; border: 1pt solid #000; border-radius: 1.5mm; margin-top: 2mm; }
+
+  @media print {
+    html, body { width: 210mm; }
+    .invoice   { page-break-after: avoid; }
+    .qr-slip   { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ RECHNUNG ══════════════════════════════════════════ -->
+<div class="invoice">
+
+  <div class="inv-header">
+    <div>
+      <div class="inv-logo">🏡 ${KITA_SETTINGS.name}</div>
+      <div class="inv-logo-sub">Betreuung · Verwaltung · Schweiz</div>
+      <div class="inv-logo-addr">
+        ${KITA_SETTINGS.strasse}<br/>
+        ${KITA_SETTINGS.plz} ${KITA_SETTINGS.ort}<br/>
+        ${KITA_SETTINGS.uid}
+      </div>
+    </div>
+    <div class="inv-rechnungnr">
+      <h1>RECHNUNG</h1>
+      <p>${r.nr||"–"}</p>
+      <div class="inv-status">${r.status==="bezahlt"?"✓ BEZAHLT":"OFFEN"}</div>
+    </div>
+  </div>
+
+  <div class="inv-meta">
+    <div class="inv-meta-block">
+      <h3>Rechnungsempfänger</h3>
+      <p>
+        <strong>${r.kindName||"–"}</strong><br/>
+        ${r.eltern||"Eltern / Erziehungsberechtigte"}
+      </p>
+    </div>
+    <div class="inv-meta-block" style="text-align:right">
+      <h3>Rechnungsdetails</h3>
+      <p>
+        Datum: <strong>${fmtDate(r.datum)}</strong><br/>
+        Fällig: <strong>${fmtDate(r.faellig)}</strong><br/>
+        Referenz: <strong>${r.nr||"–"}</strong>
+      </p>
+    </div>
+  </div>
+
+  <table class="inv-table">
+    <thead><tr>
+      <th style="width:60%">Beschreibung</th>
+      <th>Menge</th>
+      <th>Einheit</th>
+      <th>CHF</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td>${r.bemerkung||"Betreuungsleistungen"}</td>
+        <td>1</td>
+        <td>Monat</td>
+        <td>${fmt2(netto)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="inv-totals">
+    <div class="inv-total-row"><span>Nettobetrag</span><span>CHF ${fmt2(netto)}</span></div>
+    <div class="inv-total-row"><span>MWST ${mwstSatz}%</span><span>CHF ${fmt2(mwstBetrag)}</span></div>
+    <div class="inv-total-row bold"><span>TOTAL CHF</span><span>${fmt2(betrag)}</span></div>
+  </div>
+
+</div>
+
+<!-- Trennlinie -->
+<hr class="cut-line"/>
+<p class="cut-label">✂ &nbsp; Einzahlungsschein / Bulletin de versement / Polizza di versamento</p>
+
+<!-- ══ QR-RECHNUNG (SIX Swiss Payments Standard) ════════ -->
+<div class="qr-slip">
+
+  <!-- Empfangsschein -->
+  <div class="qr-receipt">
+    <div class="qr-receipt-title">Empfangsschein</div>
+
+    <div class="qr-r-label">Konto / Zahlbar an</div>
+    <div class="qr-r-val">${ibanFmt}<br/>${KITA_SETTINGS.name}<br/>${KITA_SETTINGS.strasse}<br/>${KITA_SETTINGS.plz} ${KITA_SETTINGS.ort}</div>
+
+    <div class="qr-r-label">Referenz</div>
+    <div class="qr-r-val">${refFmt}</div>
+
+    <div class="qr-r-label">Zahlbar durch</div>
+    <div class="qr-r-val">${r.kindName||""}<br/>${r.eltern||""}</div>
+
+    <div class="qr-receipt-amount">
+      <div class="qr-r-label">Währung</div>
+      <div class="qr-r-val">CHF</div>
+      <div class="qr-r-label">Betrag</div>
+      <div class="qr-r-val" style="font-size:11pt;font-weight:900">${fmt2(betrag)}</div>
+    </div>
+
+    <div class="qr-accept">Annahmestelle</div>
+  </div>
+
+  <!-- Zahlteil -->
+  <div class="qr-payment">
+    <div class="qr-payment-title">Zahlteil</div>
+
+    <div class="qr-left">
+      <img class="qr-img" src="${qrSrc}" alt="Swiss QR Code"/>
+      <div style="display:flex;align-items:center;gap:2mm;margin-top:1mm">
+        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgdmlld0JveD0iMCAwIDIyIDIyIj48cmVjdCB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIHJ4PSIzIiBmaWxsPSIjREMwMDEyIi8+PHJlY3QgeD0iOSIgeT0iMiIgd2lkdGg9IjQiIGhlaWdodD0iMTgiIHJ4PSIxIiBmaWxsPSJ3aGl0ZSIvPjxyZWN0IHg9IjIiIHk9IjkiIHdpZHRoPSIxOCIgaGVpZ2h0PSI0IiByeD0iMSIgZmlsbD0id2hpdGUiLz48L3N2Zz4=" style="width:14px;height:14px;" alt="CH"/>
+        <span style="font-size:7pt;font-weight:700">Swiss QR Code</span>
+      </div>
+
+      <div class="qr-label" style="margin-top:3mm">Währung</div>
+      <div class="qr-val">CHF</div>
+      <div class="qr-label">Betrag</div>
+      <div class="qr-val" style="font-size:13pt;font-weight:900">${fmt2(betrag)}</div>
+    </div>
+
+    <div class="qr-right">
+      <div class="qr-label">Konto / Zahlbar an</div>
+      <div class="qr-val">
+        ${ibanFmt}<br/>
+        ${KITA_SETTINGS.name}<br/>
+        ${KITA_SETTINGS.strasse}<br/>
+        ${KITA_SETTINGS.plz} ${KITA_SETTINGS.ort}
+      </div>
+
+      <div class="qr-label">Referenz</div>
+      <div class="qr-val">${refFmt}</div>
+
+      <div class="qr-label">Zusätzliche Informationen</div>
+      <div class="qr-val">${r.bemerkung||"Betreuungsleistungen"}</div>
+
+      <div class="qr-label">Zahlbar durch</div>
+      <div class="qr-val">
+        ${r.kindName||""}<br/>
+        ${r.eltern||""}
+      </div>
+
+      <div class="qr-label">Zahlbar bis</div>
+      <div class="qr-val" style="font-weight:700">${fmtDate(r.faellig)}</div>
+    </div>
+
+  </div>
+</div>
+
+<script>window.onload = () => { window.print(); }</script>
+</body></html>`;
+
+  const w = window.open("", "_blank");
+  w.document.write(html);
+  w.document.close();
+};
+
+window._alleRechnungenDrucken = () => {
+  const liste = [...rechnungen].sort((a,b)=>b.datum?.localeCompare(a.datum||"")||0);
+  if (!liste.length) { alert("Keine Rechnungen vorhanden."); return; }
+  const rows = liste.map(r => {
+    const mwst = ((r.betrag||0)*(r.mwst||8.1)/(100+(r.mwst||8.1))).toFixed(2);
+    return `<tr>
+      <td>${r.nr||"–"}</td><td>${r.kindName||"–"}</td>
+      <td>${fmtDate(r.datum)}</td><td>${fmtDate(r.faellig)}</td>
+      <td style="text-align:right">CHF ${(r.betrag||0).toLocaleString("de-CH",{minimumFractionDigits:2})}</td>
+      <td style="text-align:right">CHF ${Number(mwst).toLocaleString("de-CH",{minimumFractionDigits:2})}</td>
+      <td><span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:${r.status==="bezahlt"?"#DCFCE7":"#FEE2E2"};color:${r.status==="bezahlt"?"#166534":"#DC2626"}">${r.status==="bezahlt"?"Bezahlt":"Offen"}</span></td>
+    </tr>`;
+  }).join("");
+  const total = liste.reduce((s,r)=>s+(r.betrag||0),0);
+  const html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"/><title>Rechnungsübersicht</title>
+  <style>@page{size:A4 landscape;margin:15mm}body{font-family:Arial,sans-serif;font-size:12px}
+  h1{color:#1A56C4;margin-bottom:4px}table{width:100%;border-collapse:collapse;margin-top:16px}
+  th{background:#F4F6FA;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#666;border-bottom:2px solid #E2E6EC}
+  td{padding:8px 10px;border-bottom:1px solid #E2E6EC}
+  tfoot td{font-weight:900;background:#EBF0FB;color:#1A56C4}
+  </style></head><body>
+  <h1>🏡 KitaPlaner — Rechnungsübersicht</h1>
+  <p style="color:#888;font-size:11px">Erstellt am ${new Date().toLocaleDateString("de-CH")} · ${liste.length} Rechnungen</p>
+  <table><thead><tr>${["Nr.","Kind","Datum","Fällig","Betrag","MWST","Status"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+  <tbody>${rows}</tbody>
+  <tfoot><tr><td colspan="4"><strong>Total</strong></td><td style="text-align:right"><strong>CHF ${total.toLocaleString("de-CH",{minimumFractionDigits:2})}</strong></td><td colspan="2"></td></tr></tfoot>
+  </table>
+  <script>window.onload=()=>window.print();</script></body></html>`;
+  const w = window.open("","_blank");
+  w.document.write(html);
+  w.document.close();
+};
+
+window._openKitaSettings = () => {
+  document.getElementById("ksName").value   = KITA_SETTINGS.name;
+  document.getElementById("ksStrasse").value= KITA_SETTINGS.strasse;
+  document.getElementById("ksPlz").value    = KITA_SETTINGS.plz;
+  document.getElementById("ksOrt").value    = KITA_SETTINGS.ort;
+  document.getElementById("ksIban").value   = KITA_SETTINGS.iban;
+  document.getElementById("ksUid").value    = KITA_SETTINGS.uid;
+  document.getElementById("kitaSettingsModal").classList.add("open");
+};
+window._saveKitaSettings = () => {
+  KITA_SETTINGS.name    = document.getElementById("ksName").value.trim();
+  KITA_SETTINGS.strasse = document.getElementById("ksStrasse").value.trim();
+  KITA_SETTINGS.plz     = document.getElementById("ksPlz").value.trim();
+  KITA_SETTINGS.ort     = document.getElementById("ksOrt").value.trim();
+  KITA_SETTINGS.iban    = document.getElementById("ksIban").value.trim();
+  KITA_SETTINGS.uid     = document.getElementById("ksUid").value.trim();
+  closeModal("kitaSettingsModal");
+  alert("Einstellungen gespeichert ✅ (gilt für diese Sitzung — dauerhaft direkt im Code eintragen)");
+};
   const r = id ? rechnungen.find(x=>x.id===id) : null;
   const f = r || { nr:"", kindId:"", betrag:0, datum:"", faellig:"", mwst:8.1, status:"offen", bemerkung:"" };
   document.getElementById("rechModalTitle").textContent = r ? "Rechnung bearbeiten" : "Neue Rechnung";
@@ -826,23 +1233,148 @@ window._openDienstModal = (id) => {
   const d = id ? dienstplaene.find(x=>x.id===id) : null;
   const f = d || { mitarbeiter:"", datum:"", von:"08:00", bis:"17:00", aufgabe:"", typ:"betreuung" };
   document.getElementById("dienstModalTitle").textContent = d ? "Eintrag bearbeiten" : "Neuer Eintrag";
-  document.getElementById("dmMitarbeiter").value = f.mitarbeiter;
-  document.getElementById("dmDatum").value       = f.datum;
-  document.getElementById("dmVon").value         = f.von;
-  document.getElementById("dmBis").value         = f.bis;
-  document.getElementById("dmAufgabe").value     = f.aufgabe;
-  document.getElementById("dmTyp").value         = f.typ;
+  // populate mitarbeiter dropdown from DB
+  const maSel = document.getElementById("dmMitarbeiter");
+  const maOpts = mitarbeiter.filter(m=>m.status==="aktiv").map(m=>`<option value="${m.name}" ${f.mitarbeiter===m.name?"selected":""}>${m.name} (${m.rolle||"?"})</option>`).join("");
+  if (maSel.tagName === "SELECT") {
+    maSel.innerHTML = `<option value="">– Mitarbeiter wählen –</option>${maOpts}`;
+    maSel.value = f.mitarbeiter;
+  } else {
+    maSel.value = f.mitarbeiter;
+  }
+  document.getElementById("dmDatum").value = f.datum;
+  document.getElementById("dmVon").value   = f.von;
+  document.getElementById("dmBis").value   = f.bis;
+  document.getElementById("dmAufgabe").value = f.aufgabe;
+  document.getElementById("dmTyp").value   = f.typ;
   document.getElementById("dmSaveBtn").onclick = () => {
     _saveDienst({
-      mitarbeiter: document.getElementById("dmMitarbeiter").value.trim(),
-      datum:       document.getElementById("dmDatum").value,
-      von:         document.getElementById("dmVon").value,
-      bis:         document.getElementById("dmBis").value,
-      aufgabe:     document.getElementById("dmAufgabe").value.trim(),
-      typ:         document.getElementById("dmTyp").value,
+      mitarbeiter: maSel.value || maSel.value,
+      datum:   document.getElementById("dmDatum").value,
+      von:     document.getElementById("dmVon").value,
+      bis:     document.getElementById("dmBis").value,
+      aufgabe: document.getElementById("dmAufgabe").value.trim(),
+      typ:     document.getElementById("dmTyp").value,
     }, id||null);
   };
   document.getElementById("dienstModal").classList.add("open");
+};
+
+// ── MITARBEITER ────────────────────────────────────────────
+window._saveMitarbeiter = async (data, id) => {
+  await setDoc(doc(db, "kunden", currentUser.uid, "mitarbeiter", id||"ma_"+Date.now()), data);
+  closeModal("mitarbModal");
+};
+window._deleteMitarbeiter = async (id) => {
+  if (!confirm("Mitarbeiter wirklich löschen?")) return;
+  await deleteDoc(doc(db, "kunden", currentUser.uid, "mitarbeiter", id));
+};
+
+function renderMitarbeiter() {
+  const aktiv    = mitarbeiter.filter(m=>m.status==="aktiv");
+  const inaktiv  = mitarbeiter.filter(m=>m.status!=="aktiv");
+  const pensum   = aktiv.reduce((s,m)=>s+(m.pensum||0),0);
+
+  // Sync-Infos: Dienste und Ferien pro Mitarbeiter
+  const heute    = new Date().toISOString().slice(0,10);
+  const dienstH  = dienstplaene.filter(d=>d.datum===heute);
+
+  const cards = aktiv.map(m => {
+    const mDienste = dienstplaene.filter(d=>d.mitarbeiter===m.name).length;
+    const mHeuteD  = dienstH.find(d=>d.mitarbeiter===m.name);
+    const mFerien  = ferien.filter(f=>f.typ!=="schliesszeit"&&f.von<=heute&&f.bis>=heute).length;
+    return `
+    <div class="ma-card">
+      <div class="ma-avatar">${m.name?.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()||"?"}</div>
+      <div class="ma-info">
+        <div class="ma-name">${m.name}</div>
+        <div class="ma-rolle">${m.rolle||"–"}</div>
+        <div class="ma-meta">
+          <span class="badge ${m.status==="aktiv"?"green":"grey"}">${m.status==="aktiv"?"Aktiv":"Inaktiv"}</span>
+          <span class="fs11 muted">${m.pensum||0}%</span>
+          ${mHeuteD?`<span class="badge primary">Heute: ${mHeuteD.von}–${mHeuteD.bis}</span>`:''}
+        </div>
+        <div class="ma-stats">
+          <div><div class="fs11 muted">Eintritt</div><div class="fs12 fw6">${fmtDate(m.eintritt)}</div></div>
+          <div><div class="fs11 muted">Qualifikation</div><div class="fs12 fw6">${m.quali||"–"}</div></div>
+          <div><div class="fs11 muted">Dienste total</div><div class="fs12 fw6">${mDienste}</div></div>
+          <div><div class="fs11 muted">Vertrag</div><div class="fs12 fw6">${m.vertrag||"–"}</div></div>
+        </div>
+      </div>
+      <div class="ma-actions">
+        <button class="btn-icon" onclick="_openMitarbModal('${m.id}')">✏️</button>
+        <button class="btn-icon danger" onclick="_deleteMitarbeiter('${m.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  const inaktivRows = inaktiv.map((m,i)=>`
+    <tr class="${i%2===0?'even':'odd'}">
+      <td class="fw6">${m.name}</td>
+      <td class="muted">${m.rolle||"–"}</td>
+      <td>${m.pensum||0}%</td>
+      <td class="muted fs12">${fmtDate(m.eintritt)}</td>
+      <td class="muted fs12">${fmtDate(m.austritt)}</td>
+      <td><div class="action-row">
+        <button class="btn-icon" onclick="_openMitarbModal('${m.id}')">✏️</button>
+        <button class="btn-icon danger" onclick="_deleteMitarbeiter('${m.id}')">🗑</button>
+      </div></td>
+    </tr>`).join("");
+
+  return `
+  <div class="stats-grid" style="margin-bottom:16px">
+    <div class="stat-card"><div class="sc-icon">👤</div><div class="sc-val primary">${aktiv.length}</div><div class="sc-lbl">Aktive Mitarbeiter</div></div>
+    <div class="stat-card"><div class="sc-icon">📊</div><div class="sc-val">${Math.round(pensum/Math.max(aktiv.length,1))}%</div><div class="sc-lbl">Ø Pensum</div></div>
+    <div class="stat-card"><div class="sc-icon">📅</div><div class="sc-val green">${dienstH.length}</div><div class="sc-lbl">Im Dienst heute</div></div>
+    <div class="stat-card"><div class="sc-icon">💼</div><div class="sc-val amber">${inaktiv.length}</div><div class="sc-lbl">Ehemalige</div></div>
+  </div>
+  <div class="toolbar">
+    <button class="btn-primary" onclick="_openMitarbModal()">+ Mitarbeiter erfassen</button>
+    <button class="btn-secondary" onclick="_setTab('dienstplan')">📅 Zum Dienstplan</button>
+    <button class="btn-secondary" onclick="_setTab('ferien')">🏖️ Zum Ferienplan</button>
+  </div>
+  <div style="display:grid;gap:12px;margin-bottom:20px">
+    ${cards||`<div class="card"><div class="empty">Noch keine Mitarbeiter erfasst.</div></div>`}
+  </div>
+  ${inaktiv.length?`
+  <div class="card table-wrap">
+    <div class="card-title" style="padding:20px 22px 0">Ehemalige Mitarbeiter</div>
+    <table style="margin-top:12px;opacity:.7">
+      <thead><tr>${["Name","Rolle","Pensum","Eintritt","Austritt",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>${inaktivRows}</tbody>
+    </table>
+  </div>`:""}`;
+}
+
+window._openMitarbModal = (id) => {
+  const m = id ? mitarbeiter.find(x=>x.id===id) : null;
+  const f = m || { name:"", rolle:"", pensum:100, quali:"", eintritt:"", austritt:"", vertrag:"unbefristet", email:"", telefon:"", status:"aktiv", notiz:"" };
+  document.getElementById("mitarbModalTitle").textContent = m ? "Mitarbeiter bearbeiten" : "Neuer Mitarbeiter";
+  document.getElementById("mmName").value     = f.name;
+  document.getElementById("mmRolle").value    = f.rolle;
+  document.getElementById("mmPensum").value   = f.pensum;
+  document.getElementById("mmQuali").value    = f.quali;
+  document.getElementById("mmEintritt").value = f.eintritt;
+  document.getElementById("mmAustritt").value = f.austritt||"";
+  document.getElementById("mmVertrag").value  = f.vertrag||"unbefristet";
+  document.getElementById("mmEmail").value    = f.email||"";
+  document.getElementById("mmTelefon").value  = f.telefon||"";
+  document.getElementById("mmStatus").value   = f.status||"aktiv";
+  document.getElementById("mmNotiz").value    = f.notiz||"";
+  document.getElementById("mmSaveBtn").onclick = () => _saveMitarbeiter({
+    name:     document.getElementById("mmName").value.trim(),
+    rolle:    document.getElementById("mmRolle").value.trim(),
+    pensum:   Number(document.getElementById("mmPensum").value),
+    quali:    document.getElementById("mmQuali").value.trim(),
+    eintritt: document.getElementById("mmEintritt").value,
+    austritt: document.getElementById("mmAustritt").value||"",
+    vertrag:  document.getElementById("mmVertrag").value,
+    email:    document.getElementById("mmEmail").value.trim(),
+    telefon:  document.getElementById("mmTelefon").value.trim(),
+    status:   document.getElementById("mmStatus").value,
+    notiz:    document.getElementById("mmNotiz").value.trim(),
+  }, id||null);
+  document.getElementById("mitarbModal").classList.add("open");
 };
 
 // ── WARTELISTE ─────────────────────────────────────────────
@@ -1309,56 +1841,104 @@ function showApp() {
   .login-btn:hover { opacity: .9; }
   #loginErr { color: var(--red); font-size: 12px; margin-top: 8px; min-height: 16px; }
 
-  /* ── APP SHELL ── */
+  /* ── APP SHELL — SIDEBAR LAYOUT ── */
   #appScreen { display: none; }
 
-  header {
-    background: var(--primary);
-    padding: 0 24px;
-    position: sticky; top: 0; z-index: 100;
+  .app-layout {
+    display: flex;
+    min-height: 100vh;
   }
-  .header-top {
-    display: flex; align-items: center; gap: 12px;
-    padding: 14px 0 0;
-  }
-  .logo-icon { font-size: 24px; }
-  .logo-text { font-family: 'Sora', sans-serif; color: white; font-weight: 800; font-size: 18px; line-height: 1; }
-  .logo-sub  { color: rgba(255,255,255,.5); font-size: 11px; }
-  .header-spacer { flex: 1; }
-  .user-info { color: rgba(255,255,255,.7); font-size: 12px; }
-  .logout-btn { background: rgba(255,255,255,.15); color: white; border: 1px solid rgba(255,255,255,.25); border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
-  .logout-btn:hover { background: rgba(255,255,255,.25); }
 
-  /* tab nav */
-  #tabNav { display: flex; gap: 2px; margin-top: 10px; }
-  .tab-btn {
-    background: none; color: rgba(255,255,255,.6);
-    border: none; border-bottom: 2px solid transparent;
-    padding: 10px 16px; font-size: 13px; font-weight: 700;
-    cursor: pointer; border-radius: 6px 6px 0 0;
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 240px;
+    min-width: 240px;
+    background: #0F2554;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+    overflow-y: auto;
+  }
+
+  .sidebar-logo {
+    padding: 22px 20px 18px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .sidebar-logo-row { display: flex; align-items: center; gap: 10px; }
+  .sidebar-logo-icon { font-size: 26px; }
+  .sidebar-logo-text { font-family: 'Sora', sans-serif; color: white; font-weight: 800; font-size: 17px; line-height: 1.1; }
+  .sidebar-logo-sub  { color: rgba(255,255,255,.4); font-size: 10px; letter-spacing: .5px; text-transform: uppercase; margin-top: 2px; }
+
+  .sidebar-section { padding: 16px 12px 4px; }
+  .sidebar-section-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: rgba(255,255,255,.3);
+    padding: 0 8px; margin-bottom: 4px;
+  }
+
+  .nav-btn {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 9px 12px;
+    background: none; border: none; border-radius: 8px;
+    color: rgba(255,255,255,.6); font-size: 13px; font-weight: 600;
+    cursor: pointer; text-align: left;
     transition: all .15s;
+    margin-bottom: 2px;
   }
-  .tab-btn.active { background: rgba(255,255,255,.12); color: white; border-bottom-color: white; }
-  .tab-btn:hover:not(.active) { color: rgba(255,255,255,.85); }
+  .nav-btn:hover { background: rgba(255,255,255,.08); color: rgba(255,255,255,.9); }
+  .nav-btn.active { background: rgba(255,255,255,.12); color: white; }
+  .nav-btn.active .nav-icon { opacity: 1; }
+  .nav-icon { font-size: 15px; opacity: .7; width: 20px; text-align: center; }
+  .nav-badge { margin-left: auto; background: var(--red); color: white; border-radius: 10px; font-size: 10px; font-weight: 800; padding: 1px 6px; }
 
-  /* stat bar */
-  #statBar {
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 16px 12px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .sidebar-user { color: rgba(255,255,255,.5); font-size: 11px; margin-bottom: 8px; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar-logout {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; padding: 9px 12px;
+    background: rgba(255,255,255,.07); border: none; border-radius: 8px;
+    color: rgba(255,255,255,.6); font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all .15s;
+  }
+  .sidebar-logout:hover { background: rgba(255,255,255,.12); color: white; }
+
+  /* ── MAIN AREA ── */
+  .main-area {
+    margin-left: 240px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  .topbar {
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    display: flex; gap: 24px; flex-wrap: wrap;
-    padding: 12px 24px;
+    padding: 0 28px;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    position: sticky; top: 0; z-index: 50;
   }
-  .stat-item { display: flex; align-items: center; gap: 6px; }
-  .stat-icon { font-size: 14px; }
-  .stat-label { font-size: 12px; color: var(--muted); }
-  .stat-item strong { font-size: 13px; font-weight: 800; }
-  strong.green { color: var(--green); }
-  strong.amber { color: var(--amber); }
-  strong.red   { color: var(--red); }
+  .topbar-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 17px; font-weight: 800; color: var(--text);
+    flex: 1;
+  }
+  .topbar-stats { display: flex; gap: 20px; }
+  .ts-item { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .ts-label { color: var(--muted); }
+  .ts-val   { font-weight: 800; }
 
-  /* main */
-  main { max-width: 1100px; margin: 0 auto; padding: 24px 24px 60px; }
-  .page-title { font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 800; margin-bottom: 18px; }
+  main { padding: 24px 28px 60px; }
+  .page-title { font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 800; margin-bottom: 18px; display: none; }
 
   /* card */
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; }
@@ -1391,6 +1971,7 @@ function showApp() {
   .fs12      { font-size: 12px; }
   .green     { color: var(--green); }
   .amber     { color: var(--amber); }
+  .red       { color: var(--red); }
 
   .tage-row  { display: flex; gap: 3px; flex-wrap: wrap; }
   .tage-chip { font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 3px; background: var(--bg); color: var(--border); }
@@ -1399,22 +1980,27 @@ function showApp() {
   .badge { border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; letter-spacing: .3px; }
   .badge.green  { background: var(--green-light); color: #166534; }
   .badge.amber  { background: var(--amber-light); color: #92400e; }
+  .badge.grey   { background: var(--bg); color: var(--muted); }
+  .badge.red    { background: var(--red-light); color: var(--red); }
+  .badge.primary{ background: var(--primary-light); color: var(--primary); }
 
-  .action-row { display: flex; gap: 6px; }
+  .action-row { display: flex; gap: 6px; flex-wrap: wrap; }
   .btn-icon   { background: none; border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
   .btn-icon.danger { border-color: var(--red-light); color: var(--red); }
-  .btn-sm     { border: none; border-radius: 6px; padding: 5px 10px; font-size: 11px; font-weight: 700; cursor: pointer; }
-  .btn-sm.danger  { background: var(--red-light); color: var(--red); }
-  .btn-sm.success { background: var(--green-light); color: var(--green); }
+  .btn-sm     { border: none; border-radius: 6px; padding: 5px 10px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .btn-sm.danger      { background: var(--red-light); color: var(--red); }
+  .btn-sm.success     { background: var(--green-light); color: var(--green); }
+  .btn-sm.primary-btn { background: var(--primary-light); color: var(--primary); }
+  .btn-secondary { background: var(--surface); color: var(--primary); border: 1.5px solid var(--primary); border-radius: 8px; padding: 9px 14px; font-weight: 700; font-size: 13px; cursor: pointer; }
 
   .tally { font-size: 11px; color: var(--muted); margin-top: 8px; }
   .empty { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
 
   /* chart */
   .chart-wrap { overflow-x: auto; padding-bottom: 4px; }
-  .chart-bars { display: flex; align-items: flex-end; gap: 5px; min-width: 860px; height: 130px; padding: 0 4px 24px; position: relative; }
+  .chart-bars { display: flex; align-items: flex-end; gap: 5px; min-width: 860px; height: 130px; padding: 0 4px 24px; }
   .bar-col    { flex: 1; display: flex; flex-direction: column; align-items: center; }
-  .bar        { width: 100%; border-radius: 3px 3px 0 0; transition: opacity .15s; cursor: default; }
+  .bar        { width: 100%; border-radius: 3px 3px 0 0; transition: opacity .15s; }
   .bar:hover  { opacity: .8; }
   .bar-tip    { font-size: 9px; color: var(--muted); margin-bottom: 2px; }
   .bar-label  { font-size: 9px; color: var(--muted); transform: rotate(-40deg); transform-origin: top left; white-space: nowrap; margin-top: 6px; margin-left: 6px; }
@@ -1430,10 +2016,10 @@ function showApp() {
   .prog-fill { height: 100%; border-radius: 3px; }
 
   /* stats grid */
-  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 12px; }
-  .stat-card  { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
-  .sc-icon    { font-size: 20px; margin-bottom: 8px; }
-  .sc-val     { font-family: 'Sora', sans-serif; font-size: 26px; font-weight: 800; line-height: 1; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px; }
+  .stat-card  { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .sc-icon    { font-size: 18px; margin-bottom: 8px; }
+  .sc-val     { font-family: 'Sora', sans-serif; font-size: 24px; font-weight: 800; line-height: 1; }
   .sc-val.primary { color: var(--primary); }
   .sc-val.green   { color: var(--green); }
   .sc-val.amber   { color: var(--amber); }
@@ -1441,17 +2027,39 @@ function showApp() {
   .sc-sub     { font-size: 11px; color: var(--border); margin-top: 2px; }
 
   /* donut */
-  .donut-row    { display: flex; align-items: center; gap: 24px; }
+  .donut-row    { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
   .donut-legend { display: flex; flex-direction: column; gap: 12px; }
   .dl-item      { display: flex; align-items: center; gap: 10px; }
   .dl-item .dot { flex-shrink: 0; }
 
+  /* mitarbeiter cards */
+  .ma-card    { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; display: flex; gap: 16px; align-items: flex-start; }
+  .ma-avatar  { width: 44px; height: 44px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-family: 'Sora',sans-serif; font-weight: 800; font-size: 15px; flex-shrink: 0; }
+  .ma-info    { flex: 1; }
+  .ma-name    { font-family: 'Sora',sans-serif; font-weight: 700; font-size: 15px; }
+  .ma-rolle   { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .ma-meta    { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .ma-stats   { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px,1fr)); gap: 10px; background: var(--bg); border-radius: 8px; padding: 10px 12px; }
+  .ma-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* week grid */
+  .week-grid  { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin-top: 12px; }
+  .week-col   { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .week-col.today { border-color: var(--primary); }
+  .week-header{ background: var(--bg); padding: 8px 10px; font-weight: 700; font-size: 12px; text-align: center; border-bottom: 1px solid var(--border); }
+  .week-col.today .week-header { background: var(--primary-light); color: var(--primary); }
+  .week-entry { padding: 8px 10px; border-bottom: 1px solid var(--border); background: white; }
+  .week-empty { padding: 12px 10px; color: var(--border); font-size: 12px; text-align: center; }
+
+  textarea.field-textarea { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 13px; outline: none; resize: vertical; min-height: 80px; font-family: inherit; }
+  textarea.field-textarea:focus { border-color: var(--primary); }
+
   /* modal */
   .modal-overlay {
     display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,.4); z-index: 200;
+    background: rgba(0,0,0,.45); z-index: 200;
     align-items: center; justify-content: center;
-    backdrop-filter: blur(3px);
+    backdrop-filter: blur(4px);
   }
   .modal-overlay.open { display: flex; }
   .modal-box {
@@ -1464,9 +2072,9 @@ function showApp() {
   .modal-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .modal-grid .full { grid-column: 1/-1; }
   .field label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 4px; }
-  .field input, .field select { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 13px; outline: none; }
+  .field input, .field select { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 13px; outline: none; font-family: inherit; }
   .field input:focus, .field select:focus { border-color: var(--primary); }
-  .modal-tage { display: flex; gap: 6px; margin-top: 4px; }
+  .modal-tage { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
   .tag-btn    { padding: 4px 10px; border: 1.5px solid var(--border); border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; background: var(--bg); color: var(--muted); }
   .tag-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
   .modal-check { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; cursor: pointer; }
@@ -1474,30 +2082,19 @@ function showApp() {
   .btn-save   { flex: 1; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 8px; font-family: 'Sora', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer; }
   .btn-cancel { padding: 10px 18px; background: none; color: var(--muted); border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; }
 
-  .tab-sep    { color: rgba(255,255,255,.2); padding: 0 4px; align-self: center; }
-  .btn-sm.primary-btn { background: var(--primary-light); color: var(--primary); }
-
-  /* week grid */
-  .week-grid  { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin-top: 12px; }
-  .week-col   { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .week-col.today { border-color: var(--primary); }
-  .week-header{ background: var(--bg); padding: 8px 10px; font-weight: 700; font-size: 12px; text-align: center; border-bottom: 1px solid var(--border); }
-  .week-col.today .week-header { background: var(--primary-light); color: var(--primary); }
-  .week-entry { padding: 8px 10px; border-bottom: 1px solid var(--border); background: white; }
-  .week-empty { padding: 12px 10px; color: var(--border); font-size: 12px; text-align: center; }
-  .badge.grey    { background: var(--bg); color: var(--muted); }
-  .badge.red     { background: var(--red-light); color: var(--red); }
-  .badge.primary { background: var(--primary-light); color: var(--primary); }
-  .btn-secondary { background: var(--surface); color: var(--primary); border: 1.5px solid var(--primary); border-radius: 8px; padding: 9px 14px; font-weight: 700; font-size: 13px; cursor: pointer; }
-  textarea.field-textarea { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 13px; outline: none; resize: vertical; min-height: 80px; font-family: inherit; }
-  textarea.field-textarea:focus { border-color: var(--primary); }
-
+  @media (max-width: 768px) {
+    .sidebar { width: 200px; min-width: 200px; }
+    .main-area { margin-left: 200px; }
+  }
   @media (max-width: 600px) {
-    header, #statBar, main { padding-left: 14px; padding-right: 14px; }
+    .sidebar { display: none; }
+    .main-area { margin-left: 0; }
     .modal-grid { grid-template-columns: 1fr; }
     .modal-grid .full { grid-column: 1; }
     .stats-grid { grid-template-columns: 1fr 1fr; }
     .week-grid  { grid-template-columns: repeat(5,minmax(80px,1fr)); overflow-x: auto; }
+    main { padding: 16px 14px 60px; }
+    .topbar { padding: 0 14px; }
   }
 </style>
 </head>
@@ -1525,27 +2122,42 @@ function showApp() {
 
 <!-- ── APP ── -->
 <div id="appScreen">
+<div class="app-layout">
 
-  <header>
-    <div class="header-top">
-      <div class="logo-icon">🏡</div>
-      <div>
-        <div class="logo-text">KitaPlaner</div>
-        <div class="logo-sub">Verwaltung · Schweiz</div>
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-row">
+        <span class="sidebar-logo-icon">🏡</span>
+        <div>
+          <div class="sidebar-logo-text">KitaPlaner</div>
+          <div class="sidebar-logo-sub">Verwaltung · CH</div>
+        </div>
       </div>
-      <div class="header-spacer"></div>
-      <span class="user-info" id="userEmail"></span>
-      <button class="logout-btn" onclick="_logout()">Abmelden</button>
     </div>
-    <div id="tabNav"></div>
-  </header>
 
-  <div id="statBar"></div>
+    <div id="sidebarNav"></div>
 
-  <main>
-    <div class="page-title" id="pageTitle"></div>
-    <div id="tabContent"></div>
-  </main>
+    <div class="sidebar-footer">
+      <div class="sidebar-user" id="userEmail"></div>
+      <button class="sidebar-logout" onclick="_logout()">
+        <span>↩</span> Abmelden
+      </button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div class="main-area">
+    <div class="topbar">
+      <div class="topbar-title" id="topbarTitle">Belegung</div>
+      <div class="topbar-stats" id="statBar"></div>
+    </div>
+    <main>
+      <div id="tabContent"></div>
+    </main>
+  </div>
+
+</div>
 </div>
 
 <!-- ── MODAL: KIND ── -->
@@ -1671,7 +2283,7 @@ function showApp() {
   <div class="modal-box">
     <div class="modal-title" id="dienstModalTitle">Neuer Eintrag</div>
     <div class="modal-grid">
-      <div class="field full"><label>Mitarbeiter/in</label><input id="dmMitarbeiter" type="text" placeholder="Name Mitarbeiter/in"/></div>
+      <div class="field full"><label>Mitarbeiter/in</label><select id="dmMitarbeiter"></select></div>
       <div class="field"><label>Datum</label><input id="dmDatum" type="date"/></div>
       <div class="field"><label>Typ</label>
         <select id="dmTyp">
@@ -1756,6 +2368,62 @@ function showApp() {
     <div class="modal-footer">
       <button class="btn-save" id="dkmSaveBtn">Speichern</button>
       <button class="btn-cancel" onclick="closeModal('dokumentModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: MITARBEITER ── -->
+<div class="modal-overlay" id="mitarbModal" onclick="if(event.target===this)closeModal('mitarbModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="mitarbModalTitle">Neuer Mitarbeiter</div>
+    <div class="modal-grid">
+      <div class="field full"><label>Name</label><input id="mmName" type="text" placeholder="Vorname Nachname"/></div>
+      <div class="field"><label>Rolle / Funktion</label><input id="mmRolle" type="text" placeholder="Erzieherin, Leitung…"/></div>
+      <div class="field"><label>Qualifikation</label><input id="mmQuali" type="text" placeholder="FaBe, FAGE, HF…"/></div>
+      <div class="field"><label>Pensum (%)</label><input id="mmPensum" type="number" placeholder="100" min="10" max="100" step="10"/></div>
+      <div class="field"><label>Vertragsart</label>
+        <select id="mmVertrag">
+          <option value="unbefristet">Unbefristet</option>
+          <option value="befristet">Befristet</option>
+          <option value="aushilfe">Aushilfe</option>
+          <option value="praktikum">Praktikum</option>
+        </select>
+      </div>
+      <div class="field"><label>Eintritt</label><input id="mmEintritt" type="date"/></div>
+      <div class="field"><label>Austritt (falls bekannt)</label><input id="mmAustritt" type="date"/></div>
+      <div class="field"><label>Status</label>
+        <select id="mmStatus">
+          <option value="aktiv">Aktiv</option>
+          <option value="inaktiv">Inaktiv / Ehemalig</option>
+        </select>
+      </div>
+      <div class="field"><label>E-Mail</label><input id="mmEmail" type="email" placeholder="name@kita.ch"/></div>
+      <div class="field"><label>Telefon</label><input id="mmTelefon" type="tel" placeholder="+41 79 000 00 00"/></div>
+      <div class="field full"><label>Notizen</label><textarea id="mmNotiz" class="field-textarea" placeholder="Interne Notizen…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="mmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('mitarbModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: KITA EINSTELLUNGEN ── -->
+<div class="modal-overlay" id="kitaSettingsModal" onclick="if(event.target===this)closeModal('kitaSettingsModal')">
+  <div class="modal-box">
+    <div class="modal-title">⚙️ Kita-Einstellungen (QR-Rechnung)</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:16px">Diese Angaben erscheinen auf jeder QR-Rechnung. Für dauerhafte Speicherung direkt im Code unter <code>KITA_SETTINGS</code> eintragen.</p>
+    <div class="modal-grid">
+      <div class="field full"><label>Name der Kita</label><input id="ksName" type="text" placeholder="Kita Sonnenschein"/></div>
+      <div class="field full"><label>Strasse & Hausnummer</label><input id="ksStrasse" type="text" placeholder="Musterstrasse 1"/></div>
+      <div class="field"><label>PLZ</label><input id="ksPlz" type="text" placeholder="8302"/></div>
+      <div class="field"><label>Ort</label><input id="ksOrt" type="text" placeholder="Kloten"/></div>
+      <div class="field full"><label>IBAN (Schweizer Konto, QR-IBAN empfohlen)</label><input id="ksIban" type="text" placeholder="CH56 0483 5012 3456 7800 9"/></div>
+      <div class="field full"><label>UID / MWST-Nummer</label><input id="ksUid" type="text" placeholder="CHE-123.456.789 MWST"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" onclick="_saveKitaSettings()">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('kitaSettingsModal')">Abbrechen</button>
     </div>
   </div>
 </div>
