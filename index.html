@@ -1308,7 +1308,7 @@ function renderEingewoehnung() {
         ${notizen.slice(0,2).map(n=>`<div class="ew-note-item">
           <span class="cell-sub">${fmtDate(n.datum)}</span>
           <span style="flex:1">${n.notiz||"–"}</span>
-          <button class="act-btn danger" onclick="event.stopPropagation();_deleteBeob('${n.id}')">🗑</button>
+          <button class="act-btn danger" onclick="event.stopPropagation();_deleteEwNotiz('${n.id}')">🗑</button>
         </div>`).join("")}
         ${notizen.length>2?`<div class="cell-sub" style="padding:4px 0">+${notizen.length-2} weitere Einträge</div>`:""}
       </div>
@@ -1334,6 +1334,11 @@ function renderEingewoehnung() {
   <div class="ew-grid">${cards||`<div class="empty-state">Noch keine Kinder erfasst.</div>`}</div>`;
 }
 
+window._deleteEwNotiz=async(id)=>{
+  if(!confirm("Notiz löschen?"))return;
+  try{await deleteDoc(doc(db,"kunden",currentUser.uid,"dokumente",id));}
+  catch(e){alert("Fehler: "+e.message);}
+};
 window._nextPhase=async(kindId,protoId,curPhase)=>{
   const id=protoId||"ew_"+kindId;
   await save("dokumente",id,{typ:"eingewoehnung",kindId,phase:curPhase+1,datum:new Date().toISOString().slice(0,10)});
@@ -1343,18 +1348,23 @@ window._resetPhase=async(kindId,protoId)=>{
   await save("dokumente",protoId,{typ:"eingewoehnung",kindId,phase:0,datum:new Date().toISOString().slice(0,10)});
 };
 window._openEwNotiz=(kindId,kindName)=>{
-  openModal("mEwNotiz","ewNotizTitle",`Notiz — ${kindName}`);
+  openModal("mEwNotiz","ewNotizTitle","Notiz — "+kindName);
   $("ewNotizKindId").value=kindId;
   $("ewNotizDatum").value=new Date().toISOString().slice(0,10);
   $("ewNotizText").value="";
-  $("ewNotizSave").onclick=()=>{
+  $("ewNotizSave").onclick=async()=>{
     const txt=$("ewNotizText").value.trim();
+    const dat=$("ewNotizDatum").value;
     if(!txt){alert("Bitte Text eingeben.");return;}
-    save("dokumente","ew_notiz_"+Date.now(),{
-      typ:"ew_notiz",kindId,kindName,
-      datum:$("ewNotizDatum").value,
-      notiz:txt
-    }).then(ok=>ok&&closeModal("mEwNotiz"));
+    if(!dat){alert("Bitte Datum wählen.");return;}
+    try {
+      const uid=currentUser.uid;
+      const docId="ew_notiz_"+Date.now();
+      await setDoc(doc(db,"kunden",uid,"dokumente",docId),{
+        typ:"ew_notiz",kindId,kindName,datum:dat,notiz:txt
+      });
+      closeModal("mEwNotiz");
+    } catch(e){ alert("Fehler: "+e.message); }
   };
 };
 
@@ -1529,29 +1539,71 @@ function renderTagesstruktur() {
 
 window._openTagesModal=id=>{
   const p=id?tagesstrukturen.find(x=>x.id===id):null;
-  const f=p||{bezeichnung:"",datum:new Date().toISOString().slice(0,10),notizen:"",aktiv:true,plan:{}};
+  const f=p||{bezeichnung:"",datum:new Date().toISOString().slice(0,10),notizen:"",aktiv:true,plan:{},customSlots:[]};
   openModal("mTages","tagesTitle",p?"Plan bearbeiten":"Neuer Tagesplan");
   setFields({tagesBez:f.bezeichnung,tagesDatum:f.datum,tagesNotizen:f.notizen||"",tagesAktiv:f.aktiv!==false});
 
-  // Build slot editors
   const WDAYS=["Montag","Dienstag","Mittwoch","Donnerstag","Freitag"];
   const cont=$("tagesSlotsContainer");
-  // Build slot inputs safely without nested template literals
-  const slotHTML = TAGES_SLOTS.map(slot=>{
-    const val = (f.plan && f.plan.Montag && f.plan.Montag[slot.id]) || "";
-    return '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px;margin-bottom:6px;align-items:center">'
-      + '<div><div style="font-size:12px;font-weight:600">'+slot.label+'</div><div class="cell-sub">'+slot.zeit+'</div></div>'
-      + '<input type="text" class="field-input" id="slot_'+slot.id+'" value="'+val.replace(/"/g,"&quot;")+'" placeholder="Beschreibung (optional)"/>'
-      + '</div>';
-  }).join("");
-  cont.innerHTML = '<div style="margin-bottom:12px">'
-    + '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Tagesablauf (für alle Wochentage)</div>'
-    + slotHTML
-    + '</div>';
+
+  // Merge default slots with any custom slots saved in plan
+  const existingPlan = f.plan?.Montag || {};
+  const defaultIds = new Set(TAGES_SLOTS.map(s=>s.id));
+
+  // Build custom slots from saved plan keys not in defaults
+  const customKeys = Object.keys(existingPlan).filter(k=>!defaultIds.has(k));
+  let extraSlots = customKeys.map(k=>({id:k, label:k, zeit:"", custom:true}));
+  if(f.customSlots) extraSlots = f.customSlots.map(s=>({...s,custom:true}));
+
+  // Render all slots
+  const buildSlots = ()=>{
+    const allSlots = [...TAGES_SLOTS, ...extraSlots];
+    cont.innerHTML = '<div class="tages-slot-header">Zeitblöcke (für alle Wochentage gleichzeitig bearbeiten)</div>'
+      + allSlots.map(slot=>{
+          const val=(existingPlan[slot.id]||"").replace(/"/g,"&quot;");
+          return '<div class="tages-slot-row" data-id="'+slot.id+'">'
+            + '<div class="tages-slot-meta">'
+            + '<input class="field-input tages-slot-label-inp" value="'+slot.label.replace(/"/g,"&quot;")+'" placeholder="Bezeichnung" style="font-weight:600;'+(slot.custom?"border-color:var(--primary-mid)":"border-color:transparent;background:transparent;")+'"'+(slot.custom?'':' readonly')+'/>'
+            + (slot.zeit?'<div class="cell-sub">'+slot.zeit+'</div>':'<input class="field-input tages-slot-zeit-inp" value="'+slot.zeit+'" placeholder="z.B. 09:00–10:00" style="font-size:11px;padding:3px 6px;margin-top:2px"/>')
+            + '</div>'
+            + '<input type="text" class="field-input tages-slot-val-inp" value="'+val+'" placeholder="Beschreibung für diesen Block…"/>'
+            + (slot.custom?'<button class="act-btn danger tages-remove-btn" onclick="_removeTagesSlot(this)" title="Entfernen">×</button>':'')
+            + '</div>';
+        }).join("")
+      + '<button class="tages-add-btn" onclick="_addTagesSlot()">+ Eigenen Zeitblock hinzufügen</button>';
+  };
+  buildSlots();
+
+  window._addTagesSlot=()=>{
+    const newId="custom_"+Date.now();
+    extraSlots.push({id:newId,label:"Neuer Block",zeit:"",custom:true});
+    buildSlots();
+    // Focus new label input
+    const rows=cont.querySelectorAll('.tages-slot-row');
+    const lastInp=rows[rows.length-1]?.querySelector('.tages-slot-label-inp');
+    if(lastInp){lastInp.select();lastInp.focus();}
+  };
+  window._removeTagesSlot=btn=>{
+    const row=btn.closest('.tages-slot-row');
+    const rid=row.dataset.id;
+    extraSlots=extraSlots.filter(s=>s.id!==rid);
+    row.remove();
+  };
 
   $("tagesSave").onclick=()=>{
     const slotPlan={};
-    TAGES_SLOTS.forEach(s=>{const v=$(  "slot_"+s.id)?.value?.trim();if(v)slotPlan[s.id]=v;});
+    const savedCustom=[];
+    cont.querySelectorAll('.tages-slot-row').forEach(row=>{
+      const id=row.dataset.id;
+      const labelInp=row.querySelector('.tages-slot-label-inp');
+      const zeitInp=row.querySelector('.tages-slot-zeit-inp');
+      const valInp=row.querySelector('.tages-slot-val-inp');
+      const label=labelInp?labelInp.value.trim():id;
+      const zeit=zeitInp?zeitInp.value.trim():"";
+      const val=valInp?valInp.value.trim():"";
+      if(val) slotPlan[id]=val;
+      if(!defaultIds.has(id)) savedCustom.push({id,label,zeit,custom:true});
+    });
     const planByDay={};
     WDAYS.forEach(d=>{planByDay[d]={...slotPlan};});
     _saveTages({
@@ -1559,7 +1611,8 @@ window._openTagesModal=id=>{
       datum:$("tagesDatum").value,
       notizen:$("tagesNotizen").value.trim(),
       aktiv:$("tagesAktiv").checked,
-      plan:planByDay
+      plan:planByDay,
+      customSlots:savedCustom,
     },id||null);
   };
 };
@@ -2218,12 +2271,26 @@ td .cell-sub { margin-top: 0; }
 
 /* ── RESPONSIVE ──────────────────────────────────────── */
 @media (max-width: 1024px) {
-  :root { --sidebar-w: 52px; }
-  .nav-label, .nav-group-label, .sidebar-logo-text,
+  :root { --sidebar-w: 68px; }
+  .nav-group-label, .sidebar-logo-text,
   .sidebar-logo-sub, #userEmail, .logout-btn span:not(:first-child) { display: none; }
-  .nav-item { justify-content: center; padding: 9px; }
-  .sidebar-logo { justify-content: center; padding: 14px 8px; }
-  .sidebar-logo-icon { font-size: 20px; }
+  .nav-item {
+    flex-direction: column; justify-content: center;
+    align-items: center; padding: 7px 4px;
+    gap: 3px;
+  }
+  .nav-label {
+    display: block !important;
+    font-size: 9px; font-weight: 600;
+    text-align: center; line-height: 1.2;
+    color: inherit; opacity: .8;
+    max-width: 60px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .nav-icon { width: 18px; height: 18px; }
+  .nav-badge { display: none; }
+  .sidebar-logo { justify-content: center; padding: 14px 4px; }
+  .sidebar-logo-icon { font-size: 22px; }
 }
 @media (max-width: 700px) {
   .form-grid { grid-template-columns: 1fr; }
@@ -2508,18 +2575,6 @@ td .cell-sub { margin-top: 0; }
     <div class="modal-footer">
       <button class="btn-save" id="nfSave">Speichern</button>
       <button class="btn-cancel" onclick="closeModal('mNotfall')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: EW NOTIZ -->
-<div class="modal-overlay" id="mEwNotiz" onclick="if(event.target===this)closeModal('mEwNotiz')">
-  <div class="modal-box">
-    <div class="modal-title" id="ewNotizTitle">Notiz</div>
-    <div class="field"><label>Beobachtungen / Notizen</label><textarea id="ewNotizText" style="min-height:120px" placeholder="Eingewöhnungsbeobachtungen…"></textarea></div>
-    <div class="modal-footer">
-      <button class="btn-save" id="ewNotizSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mEwNotiz')">Abbrechen</button>
     </div>
   </div>
 </div>
