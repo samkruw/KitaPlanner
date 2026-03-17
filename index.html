@@ -19,14 +19,13 @@ import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, s
 // 🔧 FIREBASE CONFIG — hier deine Werte eintragen
 // ─────────────────────────────────────────────────────────────
 const firebaseConfig = {
-  apiKey: "AIzaSyDmVjoz-UrRntxFyXuaYcGLtdTbN5INoqc",
-  authDomain: "kitaplanner-f4904.firebaseapp.com",
-  projectId: "kitaplanner-f4904",
-  storageBucket: "kitaplanner-f4904.firebasestorage.app",
-  messagingSenderId: "481955019001",
-  appId: "1:481955019001:web:27052ed673ee22d47f0a28"
+  apiKey:            "DEIN_API_KEY",
+  authDomain:        "DEIN_PROJEKT.firebaseapp.com",
+  projectId:         "DEIN_PROJEKT_ID",
+  storageBucket:     "DEIN_PROJEKT.appspot.com",
+  messagingSenderId: "DEINE_SENDER_ID",
+  appId:             "DEINE_APP_ID"
 };
-
 // ─────────────────────────────────────────────────────────────
 
 const app  = initializeApp(firebaseConfig);
@@ -35,10 +34,24 @@ const db   = getFirestore(app);
 
 // ── STATE ──────────────────────────────────────────────────
 let currentUser = null;
-let kinder  = [];
-let tarife  = [];
+let kinder       = [];
+let tarife       = [];
+let anwesenheiten= [];
+let rechnungen   = [];
+let nachrichten  = [];
+let dienstplaene = [];
 let unsubKinder = null;
 let unsubTarife = null;
+let unsubAnw    = null;
+let unsubRech   = null;
+let unsubNachr  = null;
+let unsubDienst = null;
+let unsubWarte  = null;
+let unsubFerien = null;
+let unsubDoku   = null;
+let warteliste  = [];
+let ferien      = [];
+let dokumente   = [];
 
 const DEFAULT_TARIFE = [
   { id: "A", name: "Basis",    preis: 85,  beschr: "2–3 Tage/Woche" },
@@ -66,8 +79,7 @@ window._login = async () => {
 };
 
 window._logout = async () => {
-  if (unsubKinder) unsubKinder();
-  if (unsubTarife) unsubTarife();
+  [unsubKinder, unsubTarife, unsubAnw, unsubRech, unsubNachr, unsubDienst, unsubWarte, unsubFerien, unsubDoku].forEach(u => u && u());
   await signOut(auth);
 };
 
@@ -82,7 +94,6 @@ function subscribeData() {
 
   unsubTarife = onSnapshot(collection(db, "kunden", uid, "tarife"), async snap => {
     if (snap.empty) {
-      // seed default tarife
       for (const t of DEFAULT_TARIFE) {
         await setDoc(doc(db, "kunden", uid, "tarife", t.id), t);
       }
@@ -91,9 +102,90 @@ function subscribeData() {
       renderAll();
     }
   });
+
+  unsubAnw = onSnapshot(collection(db, "kunden", uid, "anwesenheiten"), snap => {
+    anwesenheiten = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  });
+
+  unsubRech = onSnapshot(collection(db, "kunden", uid, "rechnungen"), snap => {
+    rechnungen = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  });
+
+  unsubNachr = onSnapshot(collection(db, "kunden", uid, "nachrichten"), snap => {
+    nachrichten = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  });
+
+  unsubDienst = onSnapshot(collection(db, "kunden", uid, "dienstplaene"), snap => {
+    dienstplaene = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  });
+
+  unsubWarte = onSnapshot(collection(db, "kunden", uid, "warteliste"), snap => {
+    warteliste = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  });
+
+  unsubFerien = onSnapshot(collection(db, "kunden", uid, "ferien"), snap => {
+    ferien = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  });
+
+  unsubDoku = onSnapshot(collection(db, "kunden", uid, "dokumente"), snap => {
+    dokumente = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  });
 }
 
-// ── CRUD KINDER ────────────────────────────────────────────
+// ── CRUD ANWESENHEIT ───────────────────────────────────────
+window._saveAnwesenheit = async (data, id) => {
+  const uid = currentUser.uid;
+  await setDoc(doc(db, "kunden", uid, "anwesenheiten", id || "anw_"+Date.now()), data);
+  closeModal("anwModal");
+};
+window._deleteAnwesenheit = async (id) => {
+  if (!confirm("Eintrag löschen?")) return;
+  await deleteDoc(doc(db, "kunden", currentUser.uid, "anwesenheiten", id));
+};
+
+// ── CRUD RECHNUNGEN ────────────────────────────────────────
+window._saveRechnung = async (data, id) => {
+  const uid = currentUser.uid;
+  await setDoc(doc(db, "kunden", uid, "rechnungen", id || "rech_"+Date.now()), data);
+  closeModal("rechModal");
+};
+window._deleteRechnung = async (id) => {
+  if (!confirm("Rechnung löschen?")) return;
+  await deleteDoc(doc(db, "kunden", currentUser.uid, "rechnungen", id));
+};
+window._toggleRechStatus = async (id, current) => {
+  const r = rechnungen.find(x=>x.id===id); if (!r) return;
+  await setDoc(doc(db, "kunden", currentUser.uid, "rechnungen", id), { ...r, status: current==="bezahlt"?"offen":"bezahlt" });
+};
+
+// ── CRUD NACHRICHTEN ───────────────────────────────────────
+window._saveNachricht = async (data, id) => {
+  const uid = currentUser.uid;
+  await setDoc(doc(db, "kunden", uid, "nachrichten", id || "nachr_"+Date.now()), data);
+  closeModal("nachrichtModal");
+};
+window._deleteNachricht = async (id) => {
+  if (!confirm("Nachricht löschen?")) return;
+  await deleteDoc(doc(db, "kunden", currentUser.uid, "nachrichten", id));
+};
+
+// ── CRUD DIENSTPLAN ────────────────────────────────────────
+window._saveDienst = async (data, id) => {
+  const uid = currentUser.uid;
+  await setDoc(doc(db, "kunden", uid, "dienstplaene", id || "dienst_"+Date.now()), data);
+  closeModal("dienstModal");
+};
+window._deleteDienst = async (id) => {
+  if (!confirm("Eintrag löschen?")) return;
+  await deleteDoc(doc(db, "kunden", currentUser.uid, "dienstplaene", id));
+};
 window._saveKind = async (data, id) => {
   const uid = currentUser.uid;
   const kindId = id || "kind_" + Date.now();
@@ -213,9 +305,50 @@ function renderAll() {
   renderStats();
   renderTabNav();
   const c = document.getElementById("tabContent");
-  if      (activeTab === "belegung") c.innerHTML = renderBelegung();
-  else if (activeTab === "forecast") c.innerHTML = renderForecast();
-  else if (activeTab === "subv")     c.innerHTML = renderSubv();
+  if      (activeTab === "belegung")      c.innerHTML = renderBelegung();
+  else if (activeTab === "forecast")      c.innerHTML = renderForecast();
+  else if (activeTab === "subv")          c.innerHTML = renderSubv();
+  else if (activeTab === "anwesenheit")   c.innerHTML = renderAnwesenheit();
+  else if (activeTab === "rechnung")      c.innerHTML = renderRechnung();
+  else if (activeTab === "kommunikation") c.innerHTML = renderKommunikation();
+  else if (activeTab === "dienstplan")    c.innerHTML = renderDienstplan();
+  else if (activeTab === "warteliste")    c.innerHTML = renderWarteliste();
+  else if (activeTab === "ferien")        c.innerHTML = renderFerien();
+  else if (activeTab === "dokumente")     c.innerHTML = renderDokumente();
+  else if (activeTab === "beitragsrechner") c.innerHTML = renderBeitragsrechner();
+  else if (activeTab === "mahnwesen")     c.innerHTML = renderMahnwesen();
+  else if (activeTab === "jahresabschluss") c.innerHTML = renderJahresabschluss();
+}
+
+function renderTabNav() {
+  const groups = [
+    { label:"Kinder",    tabs:[
+      { id:"belegung",      icon:"👶", label:"Belegung"      },
+      { id:"warteliste",    icon:"⏳", label:"Warteliste"    },
+      { id:"dokumente",     icon:"📁", label:"Dokumente"     },
+      { id:"anwesenheit",   icon:"✅", label:"Anwesenheit"   },
+    ]},
+    { label:"Personal",  tabs:[
+      { id:"dienstplan",    icon:"📅", label:"Dienstplan"    },
+      { id:"ferien",        icon:"🏖️", label:"Ferienplan"    },
+    ]},
+    { label:"Finanzen",  tabs:[
+      { id:"rechnung",      icon:"🧾", label:"Rechnungen"    },
+      { id:"mahnwesen",     icon:"⚠️", label:"Mahnwesen"     },
+      { id:"beitragsrechner",icon:"🧮",label:"Beitragsrechner"},
+      { id:"jahresabschluss",icon:"📊",label:"Jahresabschluss"},
+    ]},
+    { label:"Planung",   tabs:[
+      { id:"kommunikation", icon:"✉️", label:"Kommunikation" },
+      { id:"forecast",      icon:"📈", label:"Forecast"      },
+      { id:"subv",          icon:"🏛️", label:"Subventionen"  },
+    ]},
+  ];
+  document.getElementById("tabNav").innerHTML = groups.map(g =>
+    g.tabs.map(t =>
+      `<button class="tab-btn ${activeTab===t.id?'active':''}" onclick="_setTab('${t.id}')">${t.icon} ${t.label}</button>`
+    ).join("")
+  ).join('<span class="tab-sep">|</span>');
 }
 
 function renderStats() {
@@ -229,17 +362,6 @@ function renderStats() {
     <div class="stat-item"><span class="stat-icon">📊</span><span class="stat-label">Auslastung</span><strong class="${ausl>80?'green':ausl>60?'amber':'red'}">${ausl}%</strong></div>
     <div class="stat-item"><span class="stat-icon">💰</span><span class="stat-label">Umsatz/Mt.</span><strong>CHF ${umsatz.toLocaleString("de-CH")}</strong></div>
   `;
-}
-
-function renderTabNav() {
-  const tabs = [
-    { id:"belegung", icon:"👶", label:"Belegungsliste" },
-    { id:"forecast", icon:"📈", label:"Forecast" },
-    { id:"subv",     icon:"🏛️", label:"Subventionen" },
-  ];
-  document.getElementById("tabNav").innerHTML = tabs.map(t =>
-    `<button class="tab-btn ${activeTab===t.id?'active':''}" onclick="_setTab('${t.id}')">${t.icon} ${t.label}</button>`
-  ).join("");
 }
 
 // ── BELEGUNGSLISTE ─────────────────────────────────────────
@@ -425,6 +547,700 @@ function renderSubv() {
     <table>
       <thead><tr>${["Kind","Tarif","Tage/Woche","Status","Beitrag/Mt.","Aktion"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
       <tbody>${rows||'<tr><td colspan="6" class="empty">Noch keine Kinder erfasst.</td></tr>'}</tbody>
+    </table>
+  </div>`;
+}
+
+// ── ANWESENHEIT ────────────────────────────────────────────
+function renderAnwesenheit() {
+  const today = new Date().toISOString().slice(0,10);
+  const anwHeute = anwesenheiten.filter(a => a.datum === today);
+  const anwesend = anwHeute.filter(a => a.status === "anwesend").length;
+  const abwesend = anwHeute.filter(a => a.status === "abwesend").length;
+
+  const kindRows = kinder.map(k => {
+    const eintrag = anwHeute.find(a => a.kindId === k.id);
+    const status = eintrag?.status || "–";
+    return `
+    <tr>
+      <td class="fw6">${k.name}</td>
+      <td class="muted fs12">${k.tage?.join(", ")||"–"}</td>
+      <td>
+        ${status==="anwesend"?'<span class="badge green">Anwesend</span>':
+          status==="abwesend"?'<span class="badge red">Abwesend</span>':
+          '<span class="badge grey">Nicht erfasst</span>'}
+      </td>
+      <td class="muted fs12">${eintrag?.bemerkung||"–"}</td>
+      <td>
+        <div class="action-row">
+          <button class="btn-sm success" onclick="_quickAnw('${k.id}','${k.name}','anwesend')">✅ An</button>
+          <button class="btn-sm danger"  onclick="_quickAnw('${k.id}','${k.name}','abwesend')">❌ Ab</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+
+  const histRows = [...anwesenheiten].sort((a,b)=>b.datum.localeCompare(a.datum)).slice(0,30).map((a,i)=>`
+    <tr class="${i%2===0?'even':'odd'}">
+      <td class="fs12 muted">${fmtDate(a.datum)}</td>
+      <td class="fw6">${a.kindName||"–"}</td>
+      <td>${a.status==="anwesend"?'<span class="badge green">Anwesend</span>':'<span class="badge red">Abwesend</span>'}</td>
+      <td class="muted fs12">${a.bemerkung||"–"}</td>
+      <td><button class="btn-icon danger" onclick="_deleteAnwesenheit('${a.id}')">🗑</button></td>
+    </tr>`).join("");
+
+  return `
+  <div class="stats-grid" style="margin-bottom:16px">
+    <div class="stat-card"><div class="sc-icon">📅</div><div class="sc-val primary">${new Date().toLocaleDateString("de-CH",{weekday:"long",day:"numeric",month:"long"})}</div><div class="sc-lbl">Heute</div></div>
+    <div class="stat-card"><div class="sc-icon">✅</div><div class="sc-val green">${anwesend}</div><div class="sc-lbl">Anwesend heute</div></div>
+    <div class="stat-card"><div class="sc-icon">❌</div><div class="sc-val red">${abwesend}</div><div class="sc-lbl">Abwesend heute</div></div>
+    <div class="stat-card"><div class="sc-icon">📊</div><div class="sc-val">${kinder.length - anwesend - abwesend}</div><div class="sc-lbl">Nicht erfasst</div></div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">Anwesenheit heute erfassen</div>
+    <div class="table-wrap">
+      <table><thead><tr>${["Kind","Reguläre Tage","Status","Bemerkung","Aktion"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>${kindRows||'<tr><td colspan="5" class="empty">Keine Kinder erfasst.</td></tr>'}</tbody></table>
+    </div>
+  </div>
+  <div class="card table-wrap">
+    <div class="card-title" style="padding:20px 22px 0">Verlauf (letzte 30 Einträge)</div>
+    <table style="margin-top:12px"><thead><tr>${["Datum","Kind","Status","Bemerkung",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${histRows||'<tr><td colspan="5" class="empty">Noch keine Einträge.</td></tr>'}</tbody></table>
+  </div>`;
+}
+
+window._quickAnw = async (kindId, kindName, status) => {
+  const uid = currentUser.uid;
+  const today = new Date().toISOString().slice(0,10);
+  const existingId = anwesenheiten.find(a=>a.kindId===kindId&&a.datum===today)?.id;
+  await setDoc(doc(db, "kunden", uid, "anwesenheiten", existingId||"anw_"+Date.now()), {
+    kindId, kindName, datum: today, status, bemerkung: ""
+  });
+};
+
+// ── RECHNUNGEN ─────────────────────────────────────────────
+function renderRechnung() {
+  const offen   = rechnungen.filter(r=>r.status==="offen");
+  const bezahlt = rechnungen.filter(r=>r.status==="bezahlt");
+  const totalOf = offen.reduce((s,r)=>s+(r.betrag||0),0);
+  const totalBez= bezahlt.reduce((s,r)=>s+(r.betrag||0),0);
+
+  const rows = [...rechnungen].sort((a,b)=>b.datum?.localeCompare(a.datum||"")||0).map((r,i)=>`
+    <tr class="${i%2===0?'even':'odd'}">
+      <td class="fw6">${r.nr||"–"}</td>
+      <td>${r.kindName||"–"}</td>
+      <td class="muted fs12">${fmtDate(r.datum)}</td>
+      <td class="muted fs12">${fmtDate(r.faellig)}</td>
+      <td class="fw6">CHF ${(r.betrag||0).toLocaleString("de-CH")}</td>
+      <td>${r.mwst?`<span class="badge grey">${r.mwst}% MWST</span>`:"–"}</td>
+      <td>${r.status==="bezahlt"?'<span class="badge green">Bezahlt</span>':'<span class="badge red">Offen</span>'}</td>
+      <td>
+        <div class="action-row">
+          <button class="btn-sm ${r.status==="bezahlt"?'danger':'success'}" onclick="_toggleRechStatus('${r.id}','${r.status}')">
+            ${r.status==="bezahlt"?"↩ Offen":"✅ Bezahlt"}
+          </button>
+          <button class="btn-icon" onclick="_openRechModal('${r.id}')">✏️</button>
+          <button class="btn-icon danger" onclick="_deleteRechnung('${r.id}')">🗑</button>
+        </div>
+      </td>
+    </tr>`).join("");
+
+  return `
+  <div class="stats-grid" style="margin-bottom:16px">
+    <div class="stat-card"><div class="sc-icon">🧾</div><div class="sc-val primary">${rechnungen.length}</div><div class="sc-lbl">Rechnungen total</div></div>
+    <div class="stat-card"><div class="sc-icon">⏳</div><div class="sc-val red">${offen.length}</div><div class="sc-lbl">Offen</div><div class="sc-sub">CHF ${Math.round(totalOf).toLocaleString("de-CH")}</div></div>
+    <div class="stat-card"><div class="sc-icon">✅</div><div class="sc-val green">${bezahlt.length}</div><div class="sc-lbl">Bezahlt</div><div class="sc-sub">CHF ${Math.round(totalBez).toLocaleString("de-CH")}</div></div>
+    <div class="stat-card"><div class="sc-icon">💰</div><div class="sc-val">${`CHF ${Math.round(totalOf+totalBez).toLocaleString("de-CH")}`}</div><div class="sc-lbl">Gesamtvolumen</div></div>
+  </div>
+  <div class="toolbar">
+    <button class="btn-primary" onclick="_openRechModal()">+ Rechnung erstellen</button>
+    <button class="btn-secondary" onclick="_autoRechnungen()">⚡ Auto-Rechnungen generieren</button>
+  </div>
+  <div class="card table-wrap">
+    <table><thead><tr>${["Nr.","Kind","Datum","Fällig","Betrag","MWST","Status","Aktion"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows||'<tr><td colspan="8" class="empty">Noch keine Rechnungen.</td></tr>'}</tbody></table>
+  </div>`;
+}
+
+window._openRechModal = (id) => {
+  const r = id ? rechnungen.find(x=>x.id===id) : null;
+  const f = r || { nr:"", kindId:"", betrag:0, datum:"", faellig:"", mwst:8.1, status:"offen", bemerkung:"" };
+  document.getElementById("rechModalTitle").textContent = r ? "Rechnung bearbeiten" : "Neue Rechnung";
+  document.getElementById("rmNr").value      = f.nr;
+  document.getElementById("rmBetrag").value  = f.betrag;
+  document.getElementById("rmDatum").value   = f.datum;
+  document.getElementById("rmFaellig").value = f.faellig;
+  document.getElementById("rmMwst").value    = f.mwst;
+  document.getElementById("rmBemerkung").value = f.bemerkung||"";
+  const sel = document.getElementById("rmKind");
+  sel.innerHTML = `<option value="">– Kind wählen –</option>` + kinder.map(k=>`<option value="${k.id}" data-name="${k.name}" ${f.kindId===k.id?"selected":""}>${k.name}</option>`).join("");
+  document.getElementById("rmSaveBtn").onclick = () => {
+    const opt = sel.options[sel.selectedIndex];
+    _saveRechnung({
+      nr:       document.getElementById("rmNr").value.trim(),
+      kindId:   sel.value,
+      kindName: opt?.dataset.name||"",
+      betrag:   Number(document.getElementById("rmBetrag").value),
+      datum:    document.getElementById("rmDatum").value,
+      faellig:  document.getElementById("rmFaellig").value,
+      mwst:     Number(document.getElementById("rmMwst").value),
+      status:   f.status,
+      bemerkung:document.getElementById("rmBemerkung").value.trim(),
+    }, id||null);
+  };
+  document.getElementById("rechModal").classList.add("open");
+};
+
+window._autoRechnungen = async () => {
+  if (!confirm(`Auto-Rechnungen für alle ${kinder.length} Kinder für den aktuellen Monat generieren?`)) return;
+  const uid = currentUser.uid;
+  const now = new Date();
+  const monat = now.toLocaleDateString("de-CH",{month:"long",year:"numeric"});
+  const faellig = new Date(now.getFullYear(), now.getMonth()+1, 10).toISOString().slice(0,10);
+  for (const k of kinder) {
+    const t = tarifOf(k.tarif);
+    const betrag = Math.round(monatlich(k) * 100) / 100;
+    const nr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}-${k.id.slice(-4).toUpperCase()}`;
+    await setDoc(doc(db, "kunden", uid, "rechnungen", "rech_"+Date.now()+"_"+k.id), {
+      nr, kindId:k.id, kindName:k.name, betrag, datum:now.toISOString().slice(0,10),
+      faellig, mwst:8.1, status:"offen", bemerkung:`Betreuung ${monat}`
+    });
+    await new Promise(r=>setTimeout(r,50));
+  }
+  alert("Rechnungen generiert!");
+};
+
+// ── KOMMUNIKATION ──────────────────────────────────────────
+function renderKommunikation() {
+  const rows = [...nachrichten].sort((a,b)=>b.datum?.localeCompare(a.datum||"")||0).map((n,i)=>`
+    <tr class="${i%2===0?'even':'odd'}">
+      <td class="muted fs12">${fmtDate(n.datum)}</td>
+      <td class="fw6">${n.betreff||"–"}</td>
+      <td>${n.empfaenger==="alle"?'<span class="badge green">Alle Eltern</span>':n.empfaenger||"–"}</td>
+      <td><span class="badge ${n.typ==="brief"?"primary":"amber"}">${n.typ==="brief"?"📄 Brief":"📧 E-Mail"}</span></td>
+      <td class="muted fs12" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.inhalt||"–"}</td>
+      <td>
+        <div class="action-row">
+          <button class="btn-icon" onclick="_openNachrichtModal('${n.id}')">✏️</button>
+          <button class="btn-icon danger" onclick="_deleteNachricht('${n.id}')">🗑</button>
+        </div>
+      </td>
+    </tr>`).join("");
+
+  return `
+  <div class="stats-grid" style="margin-bottom:16px">
+    <div class="stat-card"><div class="sc-icon">✉️</div><div class="sc-val primary">${nachrichten.length}</div><div class="sc-lbl">Nachrichten total</div></div>
+    <div class="stat-card"><div class="sc-icon">📄</div><div class="sc-val">${nachrichten.filter(n=>n.typ==="brief").length}</div><div class="sc-lbl">Elternbriefe</div></div>
+    <div class="stat-card"><div class="sc-icon">📧</div><div class="sc-val">${nachrichten.filter(n=>n.typ==="email").length}</div><div class="sc-lbl">E-Mails</div></div>
+    <div class="stat-card"><div class="sc-icon">👨‍👩‍👧</div><div class="sc-val green">${kinder.length}</div><div class="sc-lbl">Empfänger (Familien)</div></div>
+  </div>
+  <div class="toolbar">
+    <button class="btn-primary" onclick="_openNachrichtModal()">+ Neue Nachricht</button>
+  </div>
+  <div class="card table-wrap">
+    <table><thead><tr>${["Datum","Betreff","Empfänger","Typ","Inhalt (Vorschau)",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows||'<tr><td colspan="6" class="empty">Noch keine Nachrichten.</td></tr>'}</tbody></table>
+  </div>`;
+}
+
+window._openNachrichtModal = (id) => {
+  const n = id ? nachrichten.find(x=>x.id===id) : null;
+  const f = n || { betreff:"", empfaenger:"alle", typ:"brief", inhalt:"", datum: new Date().toISOString().slice(0,10) };
+  document.getElementById("nachrichtModalTitle").textContent = n ? "Nachricht bearbeiten" : "Neue Nachricht";
+  document.getElementById("nmBetreff").value    = f.betreff;
+  document.getElementById("nmInhalt").value     = f.inhalt;
+  document.getElementById("nmDatum").value      = f.datum;
+  document.getElementById("nmTyp").value        = f.typ;
+  const empSel = document.getElementById("nmEmpfaenger");
+  empSel.innerHTML = `<option value="alle">Alle Eltern</option>` + kinder.map(k=>`<option value="${k.id}" ${f.empfaenger===k.id?"selected":""}>${k.eltern||k.name}</option>`).join("");
+  empSel.value = f.empfaenger;
+  document.getElementById("nmSaveBtn").onclick = () => {
+    _saveNachricht({
+      betreff:    document.getElementById("nmBetreff").value.trim(),
+      empfaenger: empSel.value,
+      typ:        document.getElementById("nmTyp").value,
+      inhalt:     document.getElementById("nmInhalt").value.trim(),
+      datum:      document.getElementById("nmDatum").value,
+    }, id||null);
+  };
+  document.getElementById("nachrichtModal").classList.add("open");
+};
+
+// ── DIENSTPLAN ─────────────────────────────────────────────
+function renderDienstplan() {
+  const now = new Date();
+  const wochentage = ["Mo","Di","Mi","Do","Fr"];
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - ((now.getDay()||7)-1));
+
+  const weekDays = wochentage.map((tag, i) => {
+    const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate()+i);
+    return { tag, date: d.toISOString().slice(0,10), label: d.toLocaleDateString("de-CH",{day:"numeric",month:"short"}) };
+  });
+
+  const rows = [...dienstplaene].sort((a,b)=>(a.datum||"").localeCompare(b.datum||"")).slice(0,40).map((d,i)=>`
+    <tr class="${i%2===0?'even':'odd'}">
+      <td class="muted fs12">${fmtDate(d.datum)}</td>
+      <td class="fw6">${d.mitarbeiter||"–"}</td>
+      <td>${d.von||"–"} – ${d.bis||"–"}</td>
+      <td class="muted">${d.aufgabe||"–"}</td>
+      <td><span class="badge ${d.typ==="betreuung"?"green":"primary"}">${d.typ==="betreuung"?"👶 Betreuung":"🏢 Admin"}</span></td>
+      <td>
+        <div class="action-row">
+          <button class="btn-icon" onclick="_openDienstModal('${d.id}')">✏️</button>
+          <button class="btn-icon danger" onclick="_deleteDienst('${d.id}')">🗑</button>
+        </div>
+      </td>
+    </tr>`).join("");
+
+  const weekGrid = weekDays.map(wd => {
+    const eintraege = dienstplaene.filter(d=>d.datum===wd.date);
+    return `<div class="week-col ${wd.date===now.toISOString().slice(0,10)?'today':''}">
+      <div class="week-header">${wd.tag}<br/><span class="fs11 muted">${wd.label}</span></div>
+      ${eintraege.length ? eintraege.map(e=>`
+        <div class="week-entry">
+          <div class="fw6 fs12">${e.mitarbeiter||"?"}</div>
+          <div class="fs11 muted">${e.von||""} – ${e.bis||""}</div>
+          <div class="fs11">${e.aufgabe||""}</div>
+        </div>`).join("") : '<div class="week-empty">–</div>'}
+    </div>`;
+  }).join("");
+
+  return `
+  <div class="toolbar">
+    <button class="btn-primary" onclick="_openDienstModal()">+ Eintrag hinzufügen</button>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">Aktuelle Woche</div>
+    <div class="week-grid">${weekGrid}</div>
+  </div>
+  <div class="card table-wrap">
+    <div class="card-title" style="padding:20px 22px 0">Alle Einträge</div>
+    <table style="margin-top:12px"><thead><tr>${["Datum","Mitarbeiter","Zeit","Aufgabe","Typ",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows||'<tr><td colspan="6" class="empty">Noch keine Einträge.</td></tr>'}</tbody></table>
+  </div>`;
+}
+
+window._openDienstModal = (id) => {
+  const d = id ? dienstplaene.find(x=>x.id===id) : null;
+  const f = d || { mitarbeiter:"", datum:"", von:"08:00", bis:"17:00", aufgabe:"", typ:"betreuung" };
+  document.getElementById("dienstModalTitle").textContent = d ? "Eintrag bearbeiten" : "Neuer Eintrag";
+  document.getElementById("dmMitarbeiter").value = f.mitarbeiter;
+  document.getElementById("dmDatum").value       = f.datum;
+  document.getElementById("dmVon").value         = f.von;
+  document.getElementById("dmBis").value         = f.bis;
+  document.getElementById("dmAufgabe").value     = f.aufgabe;
+  document.getElementById("dmTyp").value         = f.typ;
+  document.getElementById("dmSaveBtn").onclick = () => {
+    _saveDienst({
+      mitarbeiter: document.getElementById("dmMitarbeiter").value.trim(),
+      datum:       document.getElementById("dmDatum").value,
+      von:         document.getElementById("dmVon").value,
+      bis:         document.getElementById("dmBis").value,
+      aufgabe:     document.getElementById("dmAufgabe").value.trim(),
+      typ:         document.getElementById("dmTyp").value,
+    }, id||null);
+  };
+  document.getElementById("dienstModal").classList.add("open");
+};
+
+// ── WARTELISTE ─────────────────────────────────────────────
+window._saveWarte = async (data, id) => {
+  await setDoc(doc(db, "kunden", currentUser.uid, "warteliste", id||"warte_"+Date.now()), data);
+  closeModal("warteModal");
+};
+window._deleteWarte = async (id) => {
+  if (!confirm("Eintrag löschen?")) return;
+  await deleteDoc(doc(db, "kunden", currentUser.uid, "warteliste", id));
+};
+window._warteZuKind = async (id) => {
+  const w = warteliste.find(x=>x.id===id);
+  if (!w || !confirm(`${w.name} in Belegungsliste übernehmen?`)) return;
+  await setDoc(doc(db, "kunden", currentUser.uid, "kinder", "kind_"+Date.now()), {
+    name: w.name, geb: w.geb, eltern: w.eltern, eintritt: w.gewuenscht||"",
+    austritt: "", subv: false, tarif: tarife[0]?.id||"A", tage: []
+  });
+  await deleteDoc(doc(db, "kunden", currentUser.uid, "warteliste", id));
+  _setTab("belegung");
+};
+
+function renderWarteliste() {
+  const sorted = [...warteliste].sort((a,b)=>a.prio-b.prio||a.anmeldedatum?.localeCompare(b.anmeldedatum||""));
+  const rows = sorted.map((w,i) => `
+    <tr class="${i%2===0?'even':'odd'}">
+      <td class="fw7" style="color:var(--primary)">#${w.prio||i+1}</td>
+      <td class="fw6">${w.name}</td>
+      <td class="muted fs12">${w.geb ? age(w.geb)+" J." : "–"}</td>
+      <td>${w.eltern||"–"}</td>
+      <td class="muted fs12">${fmtDate(w.anmeldedatum)}</td>
+      <td class="muted fs12">${fmtDate(w.gewuenscht)}</td>
+      <td class="muted">${w.bemerkung||"–"}</td>
+      <td>
+        <div class="action-row">
+          <button class="btn-sm success" onclick="_warteZuKind('${w.id}')">✅ Aufnehmen</button>
+          <button class="btn-icon" onclick="_openWarteModal('${w.id}')">✏️</button>
+          <button class="btn-icon danger" onclick="_deleteWarte('${w.id}')">🗑</button>
+        </div>
+      </td>
+    </tr>`).join("");
+
+  return `
+  <div class="stats-grid" style="margin-bottom:16px">
+    <div class="stat-card"><div class="sc-icon">⏳</div><div class="sc-val amber">${warteliste.length}</div><div class="sc-lbl">Auf Warteliste</div></div>
+    <div class="stat-card"><div class="sc-icon">📅</div><div class="sc-val primary">${warteliste.filter(w=>{ const d=new Date(w.gewuenscht); return d>=new Date()&&d<=new Date(Date.now()+90*86400000); }).length}</div><div class="sc-lbl">Eintritte nächste 90 Tage</div></div>
+    <div class="stat-card"><div class="sc-icon">👶</div><div class="sc-val green">${kinder.length}</div><div class="sc-lbl">Aktuelle Belegung</div></div>
+    <div class="stat-card"><div class="sc-icon">🆓</div><div class="sc-val">${Math.max(0,20-kinder.length)}</div><div class="sc-lbl">Freie Plätze (von 20)</div></div>
+  </div>
+  <div class="toolbar">
+    <button class="btn-primary" onclick="_openWarteModal()">+ Auf Warteliste setzen</button>
+  </div>
+  <div class="card table-wrap">
+    <table><thead><tr>${["Priorität","Kind","Alter","Elternteil","Anmeldung","Gewünschter Eintritt","Bemerkung","Aktion"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows||'<tr><td colspan="8" class="empty">Warteliste ist leer.</td></tr>'}</tbody></table>
+  </div>`;
+}
+
+window._openWarteModal = (id) => {
+  const w = id ? warteliste.find(x=>x.id===id) : null;
+  const f = w || { name:"", geb:"", eltern:"", anmeldedatum: new Date().toISOString().slice(0,10), gewuenscht:"", prio: warteliste.length+1, bemerkung:"" };
+  document.getElementById("warteModalTitle").textContent = w ? "Eintrag bearbeiten" : "Auf Warteliste setzen";
+  document.getElementById("wmName").value       = f.name;
+  document.getElementById("wmGeb").value        = f.geb;
+  document.getElementById("wmEltern").value     = f.eltern;
+  document.getElementById("wmAnmeldung").value  = f.anmeldedatum;
+  document.getElementById("wmGewuenscht").value = f.gewuenscht;
+  document.getElementById("wmPrio").value       = f.prio;
+  document.getElementById("wmBemerkung").value  = f.bemerkung||"";
+  document.getElementById("wmSaveBtn").onclick  = () => _saveWarte({
+    name: document.getElementById("wmName").value.trim(),
+    geb:  document.getElementById("wmGeb").value,
+    eltern: document.getElementById("wmEltern").value.trim(),
+    anmeldedatum: document.getElementById("wmAnmeldung").value,
+    gewuenscht: document.getElementById("wmGewuenscht").value,
+    prio: Number(document.getElementById("wmPrio").value),
+    bemerkung: document.getElementById("wmBemerkung").value.trim(),
+  }, id||null);
+  document.getElementById("warteModal").classList.add("open");
+};
+
+// ── FERIENPLAN ─────────────────────────────────────────────
+window._saveFerien = async (data, id) => {
+  await setDoc(doc(db, "kunden", currentUser.uid, "ferien", id||"ferien_"+Date.now()), data);
+  closeModal("ferienModal");
+};
+window._deleteFerien = async (id) => {
+  if (!confirm("Eintrag löschen?")) return;
+  await deleteDoc(doc(db, "kunden", currentUser.uid, "ferien", id));
+};
+
+function renderFerien() {
+  const now = new Date().toISOString().slice(0,10);
+  const upcoming = ferien.filter(f=>f.bis>=now).sort((a,b)=>a.von.localeCompare(b.von));
+  const past     = ferien.filter(f=>f.bis<now).sort((a,b)=>b.von.localeCompare(a.von));
+
+  const renderRows = (list) => list.map((f,i) => {
+    const von = new Date(f.von), bis = new Date(f.bis);
+    const tage = Math.round((bis-von)/86400000)+1;
+    return `<tr class="${i%2===0?'even':'odd'}">
+      <td class="fw6">${f.bezeichnung||"–"}</td>
+      <td class="muted fs12">${fmtDate(f.von)}</td>
+      <td class="muted fs12">${fmtDate(f.bis)}</td>
+      <td>${tage} Tag${tage!==1?"e":""}</td>
+      <td><span class="badge ${f.typ==="schliesszeit"?"red":f.typ==="ferienprogramm"?"green":"primary"}">${f.typ==="schliesszeit"?"🔒 Schliesszeit":f.typ==="ferienprogramm"?"🎉 Ferienprogramm":"📅 Betrieb"}</span></td>
+      <td class="muted fs12">${f.bemerkung||"–"}</td>
+      <td><div class="action-row">
+        <button class="btn-icon" onclick="_openFerienModal('${f.id}')">✏️</button>
+        <button class="btn-icon danger" onclick="_deleteFerien('${f.id}')">🗑</button>
+      </div></td>
+    </tr>`;
+  }).join("");
+
+  return `
+  <div class="toolbar"><button class="btn-primary" onclick="_openFerienModal()">+ Eintrag hinzufügen</button></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">Kommende Einträge</div>
+    <div class="table-wrap"><table><thead><tr>${["Bezeichnung","Von","Bis","Dauer","Typ","Bemerkung",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${renderRows(upcoming)||'<tr><td colspan="7" class="empty">Keine kommenden Einträge.</td></tr>'}</tbody></table></div>
+  </div>
+  <div class="card table-wrap">
+    <div class="card-title" style="padding:20px 22px 0">Vergangene Einträge</div>
+    <table style="margin-top:12px;opacity:.7"><thead><tr>${["Bezeichnung","Von","Bis","Dauer","Typ","Bemerkung",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${renderRows(past)||'<tr><td colspan="7" class="empty">Keine vergangenen Einträge.</td></tr>'}</tbody></table>
+  </div>`;
+}
+
+window._openFerienModal = (id) => {
+  const f = id ? ferien.find(x=>x.id===id) : null;
+  const d = f || { bezeichnung:"", von:"", bis:"", typ:"schliesszeit", bemerkung:"" };
+  document.getElementById("ferienModalTitle").textContent = f ? "Eintrag bearbeiten" : "Neuer Eintrag";
+  document.getElementById("fmBez").value     = d.bezeichnung;
+  document.getElementById("fmVon").value     = d.von;
+  document.getElementById("fmBis").value     = d.bis;
+  document.getElementById("fmTyp").value     = d.typ;
+  document.getElementById("fmBemerkung").value = d.bemerkung||"";
+  document.getElementById("fmSaveBtn").onclick = () => _saveFerien({
+    bezeichnung: document.getElementById("fmBez").value.trim(),
+    von:  document.getElementById("fmVon").value,
+    bis:  document.getElementById("fmBis").value,
+    typ:  document.getElementById("fmTyp").value,
+    bemerkung: document.getElementById("fmBemerkung").value.trim(),
+  }, id||null);
+  document.getElementById("ferienModal").classList.add("open");
+};
+
+// ── DOKUMENTE ──────────────────────────────────────────────
+window._saveDokument = async (data, id) => {
+  await setDoc(doc(db, "kunden", currentUser.uid, "dokumente", id||"dok_"+Date.now()), data);
+  closeModal("dokumentModal");
+};
+window._deleteDokument = async (id) => {
+  if (!confirm("Dokument löschen?")) return;
+  await deleteDoc(doc(db, "kunden", currentUser.uid, "dokumente", id));
+};
+
+function renderDokumente() {
+  const byKind = {};
+  dokumente.forEach(d => {
+    if (!byKind[d.kindId]) byKind[d.kindId] = [];
+    byKind[d.kindId].push(d);
+  });
+  const alleKinder = [...kinder, { id:"allgemein", name:"📁 Allgemeine Dokumente" }];
+
+  const cards = alleKinder.map(k => {
+    const docs = byKind[k.id] || [];
+    if (docs.length === 0 && k.id==="allgemein") return "";
+    return `<div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="card-title" style="margin:0">${k.name}</div>
+        <button class="btn-sm success" onclick="_openDokumentModal(null,'${k.id}','${k.name}')">+ Dokument</button>
+      </div>
+      ${docs.length ? docs.map(d=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border)">
+          <span style="font-size:18px">${d.typ==="vertrag"?"📄":d.typ==="formular"?"📝":d.typ==="notiz"?"🗒️":"🔗"}</span>
+          <div style="flex:1">
+            <div class="fw6 fs12">${d.titel||"–"}</div>
+            <div class="fs11 muted">${d.typ||""} · ${fmtDate(d.datum)}</div>
+            ${d.link?`<a href="${d.link}" target="_blank" style="font-size:11px;color:var(--primary)">${d.link.slice(0,50)}${d.link.length>50?"…":""}</a>`:""}
+            ${d.notiz?`<div class="fs11 muted" style="margin-top:2px">${d.notiz}</div>`:""}
+          </div>
+          <button class="btn-icon danger" onclick="_deleteDokument('${d.id}')">🗑</button>
+        </div>`).join("") : '<div class="fs12 muted" style="padding:8px 0">Noch keine Dokumente.</div>'}
+    </div>`;
+  }).join("");
+
+  return `
+  <div class="toolbar">
+    <button class="btn-primary" onclick="_openDokumentModal()">+ Dokument hinzufügen</button>
+  </div>
+  <div class="stats-grid" style="margin-bottom:16px">
+    <div class="stat-card"><div class="sc-icon">📁</div><div class="sc-val primary">${dokumente.length}</div><div class="sc-lbl">Dokumente total</div></div>
+    <div class="stat-card"><div class="sc-icon">📄</div><div class="sc-val">${dokumente.filter(d=>d.typ==="vertrag").length}</div><div class="sc-lbl">Verträge</div></div>
+    <div class="stat-card"><div class="sc-icon">📝</div><div class="sc-val">${dokumente.filter(d=>d.typ==="formular").length}</div><div class="sc-lbl">Formulare</div></div>
+    <div class="stat-card"><div class="sc-icon">🗒️</div><div class="sc-val">${dokumente.filter(d=>d.typ==="notiz").length}</div><div class="sc-lbl">Notizen</div></div>
+  </div>
+  ${cards||'<div class="card"><div class="empty">Noch keine Dokumente erfasst.</div></div>'}`;
+}
+
+window._openDokumentModal = (id, kindId, kindName) => {
+  const d = id ? dokumente.find(x=>x.id===id) : null;
+  const f = d || { titel:"", typ:"vertrag", datum: new Date().toISOString().slice(0,10), link:"", notiz:"", kindId: kindId||"", kindName: kindName||"" };
+  document.getElementById("dokumentModalTitle").textContent = d ? "Dokument bearbeiten" : "Neues Dokument";
+  document.getElementById("dkmTitel").value  = f.titel;
+  document.getElementById("dkmTyp").value    = f.typ;
+  document.getElementById("dkmDatum").value  = f.datum;
+  document.getElementById("dkmLink").value   = f.link||"";
+  document.getElementById("dkmNotiz").value  = f.notiz||"";
+  const sel = document.getElementById("dkmKind");
+  sel.innerHTML = `<option value="allgemein">📁 Allgemein</option>` + kinder.map(k=>`<option value="${k.id}" ${f.kindId===k.id?"selected":""}>${k.name}</option>`).join("");
+  sel.value = f.kindId||"allgemein";
+  document.getElementById("dkmSaveBtn").onclick = () => {
+    const opt = sel.options[sel.selectedIndex];
+    _saveDokument({
+      titel: document.getElementById("dkmTitel").value.trim(),
+      typ:   document.getElementById("dkmTyp").value,
+      datum: document.getElementById("dkmDatum").value,
+      link:  document.getElementById("dkmLink").value.trim(),
+      notiz: document.getElementById("dkmNotiz").value.trim(),
+      kindId: sel.value,
+      kindName: opt?.text||"",
+    }, id||null);
+  };
+  document.getElementById("dokumentModal").classList.add("open");
+};
+
+// ── ELTERNBEITRAGSRECHNER ──────────────────────────────────
+function renderBeitragsrechner() {
+  return `
+  <div class="card" style="max-width:600px">
+    <div class="card-title">🧮 Elternbeitragsrechner</div>
+    <div class="card-sub">Berechnung nach Einkommen (Schweizer Modell)</div>
+    <div class="modal-grid" style="margin-bottom:16px">
+      <div class="field"><label>Jahreseinkommen (CHF)</label><input id="bcEinkommen" type="number" placeholder="80000" oninput="calcBeitrag()"/></div>
+      <div class="field"><label>Anzahl Kinder im Haushalt</label><input id="bcKinder" type="number" placeholder="1" min="1" max="6" oninput="calcBeitrag()"/></div>
+      <div class="field"><label>Betreuungstage/Woche</label><input id="bcTage" type="number" placeholder="3" min="1" max="5" oninput="calcBeitrag()"/></div>
+      <div class="field"><label>Gewählter Tarif (CHF/Tag)</label>
+        <select id="bcTarif" onchange="calcBeitrag()">
+          ${tarife.map(t=>`<option value="${t.preis}">${t.name} — CHF ${t.preis}/T</option>`).join("")}
+        </select>
+      </div>
+    </div>
+    <div id="bcResult" style="background:var(--primary-light);border-radius:10px;padding:20px;display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div><div class="fs11 muted">Vollkosten/Monat</div><div class="sc-val" id="bcVoll" style="font-size:20px"></div></div>
+        <div><div class="fs11 muted">Subventionsbeitrag</div><div class="sc-val green" id="bcSubv" style="font-size:20px"></div></div>
+        <div><div class="fs11 muted">Elternbeitrag/Monat</div><div class="sc-val primary" id="bcEltern" style="font-size:20px;font-weight:800"></div></div>
+        <div><div class="fs11 muted">Einkommensklasse</div><div class="sc-val amber" id="bcKlasse" style="font-size:16px"></div></div>
+      </div>
+      <div style="margin-top:14px;font-size:11px;color:var(--muted)">⚠️ Richtwert — effektiver Beitrag abhängig von Gemeinde und aktuellen Richtlinien.</div>
+    </div>
+  </div>`;
+}
+
+window.calcBeitrag = () => {
+  const eink  = Number(document.getElementById("bcEinkommen")?.value)||0;
+  const kind  = Number(document.getElementById("bcKinder")?.value)||1;
+  const tage  = Number(document.getElementById("bcTage")?.value)||3;
+  const tarif = Number(document.getElementById("bcTarif")?.value)||85;
+  if (!eink) { document.getElementById("bcResult").style.display="none"; return; }
+
+  const vollkosten = tarif * tage * 4.33;
+  // Schweizer Modell: Subventionierung 0–80% je nach Einkommen
+  const bereinigt = eink / kind;
+  let subvRate = 0;
+  if      (bereinigt < 30000)  subvRate = 0.80;
+  else if (bereinigt < 50000)  subvRate = 0.60;
+  else if (bereinigt < 70000)  subvRate = 0.40;
+  else if (bereinigt < 100000) subvRate = 0.20;
+  else if (bereinigt < 130000) subvRate = 0.10;
+  else                          subvRate = 0;
+
+  const klassen = ["< CHF 30k","CHF 30–50k","CHF 50–70k","CHF 70–100k","CHF 100–130k","> CHF 130k"];
+  const ki = bereinigt<30000?0:bereinigt<50000?1:bereinigt<70000?2:bereinigt<100000?3:bereinigt<130000?4:5;
+
+  const subvBetrag = vollkosten * subvRate;
+  const elternBeitrag = vollkosten - subvBetrag;
+
+  document.getElementById("bcVoll").textContent   = `CHF ${Math.round(vollkosten).toLocaleString("de-CH")}`;
+  document.getElementById("bcSubv").textContent   = `CHF ${Math.round(subvBetrag).toLocaleString("de-CH")} (${Math.round(subvRate*100)}%)`;
+  document.getElementById("bcEltern").textContent = `CHF ${Math.round(elternBeitrag).toLocaleString("de-CH")}`;
+  document.getElementById("bcKlasse").textContent = klassen[ki];
+  document.getElementById("bcResult").style.display = "block";
+};
+
+// ── MAHNWESEN ──────────────────────────────────────────────
+function renderMahnwesen() {
+  const now = new Date().toISOString().slice(0,10);
+  const ueberfaellig = rechnungen.filter(r => r.status==="offen" && r.faellig && r.faellig < now);
+  const bald = rechnungen.filter(r => r.status==="offen" && r.faellig && r.faellig >= now);
+  const totalOffen = ueberfaellig.reduce((s,r)=>s+(r.betrag||0),0);
+
+  const rows = ueberfaellig.sort((a,b)=>a.faellig.localeCompare(b.faellig)).map((r,i) => {
+    const tage = Math.round((new Date(now)-new Date(r.faellig))/86400000);
+    const stufe = tage > 60 ? "🔴 Mahnstufe 3" : tage > 30 ? "🟠 Mahnstufe 2" : "🟡 Mahnstufe 1";
+    return `<tr class="${i%2===0?'even':'odd'}">
+      <td class="fw6">${r.kindName||"–"}</td>
+      <td class="fw6">${r.nr||"–"}</td>
+      <td class="red fw6">CHF ${(r.betrag||0).toLocaleString("de-CH")}</td>
+      <td class="muted fs12">${fmtDate(r.faellig)}</td>
+      <td class="red fw7">${tage} Tage</td>
+      <td>${stufe}</td>
+      <td>
+        <div class="action-row">
+          <button class="btn-sm success" onclick="_toggleRechStatus('${r.id}','offen')">✅ Als bezahlt markieren</button>
+          <button class="btn-sm primary-btn" onclick="_mahnungErstellen('${r.id}')">📄 Mahnung</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+
+  return `
+  <div class="stats-grid" style="margin-bottom:16px">
+    <div class="stat-card"><div class="sc-icon">⚠️</div><div class="sc-val red">${ueberfaellig.length}</div><div class="sc-lbl">Überfällige Rechnungen</div></div>
+    <div class="stat-card"><div class="sc-icon">💸</div><div class="sc-val red">CHF ${Math.round(totalOffen).toLocaleString("de-CH")}</div><div class="sc-lbl">Offener Betrag</div></div>
+    <div class="stat-card"><div class="sc-icon">📋</div><div class="sc-val amber">${bald.length}</div><div class="sc-lbl">Noch offene Rechnungen</div></div>
+    <div class="stat-card"><div class="sc-icon">🔴</div><div class="sc-val">${ueberfaellig.filter(r=>Math.round((new Date(now)-new Date(r.faellig))/86400000)>30).length}</div><div class="sc-lbl">Mahnstufe 2 / 3</div></div>
+  </div>
+  <div class="card table-wrap">
+    <div class="card-title" style="padding:20px 22px 12px">Überfällige Rechnungen</div>
+    <table><thead><tr>${["Kind","Rech.-Nr.","Betrag","Fällig seit","Verzug","Mahnstufe","Aktion"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows||'<tr><td colspan="7" class="empty">✅ Keine überfälligen Rechnungen.</td></tr>'}</tbody></table>
+  </div>`;
+}
+
+window._mahnungErstellen = (id) => {
+  const r = rechnungen.find(x=>x.id===id);
+  if (!r) return;
+  const tage = Math.round((new Date()-new Date(r.faellig))/86400000);
+  const stufe = tage>60?3:tage>30?2:1;
+  const text = `MAHNUNG ${stufe}. MAHNSTUFE\n\nKind: ${r.kindName}\nRechnung: ${r.nr}\nBetrag: CHF ${r.betrag}\nFällig seit: ${fmtDate(r.faellig)} (${tage} Tage)\n\nBitte begleichen Sie den ausstehenden Betrag innerhalb von 10 Tagen.\n\nBei Fragen wenden Sie sich bitte an die Kita-Leitung.`;
+  const w = window.open("","_blank","width=600,height=400");
+  w.document.write(`<pre style="font-family:Arial;font-size:14px;padding:30px;white-space:pre-wrap">${text}</pre><button onclick="window.print()">Drucken</button>`);
+};
+
+// ── JAHRESABSCHLUSS ────────────────────────────────────────
+function renderJahresabschluss() {
+  const jahr = new Date().getFullYear();
+  const monate = Array.from({length:12},(_,i)=>i);
+  const monatsData = monate.map(m => {
+    const label = new Date(jahr,m,1).toLocaleDateString("de-CH",{month:"long"});
+    const bezahlt = rechnungen.filter(r => {
+      const d = new Date(r.datum);
+      return d.getFullYear()===jahr && d.getMonth()===m && r.status==="bezahlt";
+    });
+    const offen = rechnungen.filter(r => {
+      const d = new Date(r.datum);
+      return d.getFullYear()===jahr && d.getMonth()===m && r.status==="offen";
+    });
+    return {
+      label,
+      einnahmen: bezahlt.reduce((s,r)=>s+(r.betrag||0),0),
+      ausstehend: offen.reduce((s,r)=>s+(r.betrag||0),0),
+      anzahl: bezahlt.length + offen.length,
+    };
+  });
+
+  const totalEinn  = monatsData.reduce((s,m)=>s+m.einnahmen,0);
+  const totalAusst = monatsData.reduce((s,m)=>s+m.ausstehend,0);
+  const mwstSatz   = 0.081;
+  const mwstBetrag = totalEinn * mwstSatz;
+  const netto      = totalEinn - mwstBetrag;
+
+  const rows = monatsData.map((m,i) => `
+    <tr class="${i%2===0?'even':'odd'}">
+      <td class="fw6">${m.label}</td>
+      <td class="fw6 green">CHF ${Math.round(m.einnahmen).toLocaleString("de-CH")}</td>
+      <td class="${m.ausstehend>0?'amber fw6':'muted'}">CHF ${Math.round(m.ausstehend).toLocaleString("de-CH")}</td>
+      <td class="muted">${m.anzahl}</td>
+      <td class="muted">CHF ${Math.round(m.einnahmen*mwstSatz).toLocaleString("de-CH")}</td>
+      <td class="fw6">CHF ${Math.round(m.einnahmen*(1-mwstSatz)).toLocaleString("de-CH")}</td>
+    </tr>`).join("");
+
+  return `
+  <div class="stats-grid" style="margin-bottom:16px">
+    <div class="stat-card"><div class="sc-icon">📅</div><div class="sc-val primary">${jahr}</div><div class="sc-lbl">Geschäftsjahr</div></div>
+    <div class="stat-card"><div class="sc-icon">✅</div><div class="sc-val green">CHF ${Math.round(totalEinn/1000*10)/10}k</div><div class="sc-lbl">Einnahmen (bezahlt)</div></div>
+    <div class="stat-card"><div class="sc-icon">⏳</div><div class="sc-val amber">CHF ${Math.round(totalAusst/1000*10)/10}k</div><div class="sc-lbl">Noch ausstehend</div></div>
+    <div class="stat-card"><div class="sc-icon">🧾</div><div class="sc-val">CHF ${Math.round(mwstBetrag).toLocaleString("de-CH")}</div><div class="sc-lbl">MWST 8.1% (geschuldet)</div></div>
+    <div class="stat-card"><div class="sc-icon">💰</div><div class="sc-val primary">CHF ${Math.round(netto/1000*10)/10}k</div><div class="sc-lbl">Nettoumsatz (exkl. MWST)</div></div>
+    <div class="stat-card"><div class="sc-icon">👶</div><div class="sc-val">${kinder.length}</div><div class="sc-lbl">Aktuelle Belegung</div></div>
+  </div>
+  <div class="toolbar">
+    <button class="btn-secondary" onclick="window.print()">🖨️ Drucken / PDF</button>
+  </div>
+  <div class="card table-wrap">
+    <div class="card-title" style="padding:20px 22px 0">Monatliche Übersicht ${jahr}</div>
+    <table style="margin-top:12px">
+      <thead><tr>${["Monat","Einnahmen","Ausstehend","Rechnungen","MWST (8.1%)","Netto"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="background:var(--primary-light);font-weight:800">
+        <td style="padding:10px 14px">Total ${jahr}</td>
+        <td style="padding:10px 14px;color:var(--green)">CHF ${Math.round(totalEinn).toLocaleString("de-CH")}</td>
+        <td style="padding:10px 14px;color:var(--amber)">CHF ${Math.round(totalAusst).toLocaleString("de-CH")}</td>
+        <td style="padding:10px 14px;color:var(--muted)">${rechnungen.length}</td>
+        <td style="padding:10px 14px">CHF ${Math.round(mwstBetrag).toLocaleString("de-CH")}</td>
+        <td style="padding:10px 14px;color:var(--primary)">CHF ${Math.round(netto).toLocaleString("de-CH")}</td>
+      </tr></tfoot>
     </table>
   </div>`;
 }
@@ -658,11 +1474,30 @@ function showApp() {
   .btn-save   { flex: 1; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 8px; font-family: 'Sora', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer; }
   .btn-cancel { padding: 10px 18px; background: none; color: var(--muted); border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; }
 
+  .tab-sep    { color: rgba(255,255,255,.2); padding: 0 4px; align-self: center; }
+  .btn-sm.primary-btn { background: var(--primary-light); color: var(--primary); }
+
+  /* week grid */
+  .week-grid  { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin-top: 12px; }
+  .week-col   { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .week-col.today { border-color: var(--primary); }
+  .week-header{ background: var(--bg); padding: 8px 10px; font-weight: 700; font-size: 12px; text-align: center; border-bottom: 1px solid var(--border); }
+  .week-col.today .week-header { background: var(--primary-light); color: var(--primary); }
+  .week-entry { padding: 8px 10px; border-bottom: 1px solid var(--border); background: white; }
+  .week-empty { padding: 12px 10px; color: var(--border); font-size: 12px; text-align: center; }
+  .badge.grey    { background: var(--bg); color: var(--muted); }
+  .badge.red     { background: var(--red-light); color: var(--red); }
+  .badge.primary { background: var(--primary-light); color: var(--primary); }
+  .btn-secondary { background: var(--surface); color: var(--primary); border: 1.5px solid var(--primary); border-radius: 8px; padding: 9px 14px; font-weight: 700; font-size: 13px; cursor: pointer; }
+  textarea.field-textarea { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 13px; outline: none; resize: vertical; min-height: 80px; font-family: inherit; }
+  textarea.field-textarea:focus { border-color: var(--primary); }
+
   @media (max-width: 600px) {
     header, #statBar, main { padding-left: 14px; padding-right: 14px; }
     .modal-grid { grid-template-columns: 1fr; }
     .modal-grid .full { grid-column: 1; }
     .stats-grid { grid-template-columns: 1fr 1fr; }
+    .week-grid  { grid-template-columns: repeat(5,minmax(80px,1fr)); overflow-x: auto; }
   }
 </style>
 </head>
@@ -784,6 +1619,143 @@ function showApp() {
     <div class="modal-footer">
       <button class="btn-save" id="tmSaveBtn">Speichern</button>
       <button class="btn-cancel" onclick="closeModal('tarifModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: RECHNUNG ── -->
+<div class="modal-overlay" id="rechModal" onclick="if(event.target===this)closeModal('rechModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="rechModalTitle">Neue Rechnung</div>
+    <div class="modal-grid">
+      <div class="field"><label>Rechnungs-Nr.</label><input id="rmNr" type="text" placeholder="2026-01-001"/></div>
+      <div class="field"><label>Kind</label><select id="rmKind"></select></div>
+      <div class="field"><label>Betrag (CHF)</label><input id="rmBetrag" type="number" placeholder="0.00" step="0.05"/></div>
+      <div class="field"><label>MWST (%)</label><input id="rmMwst" type="number" placeholder="8.1" step="0.1"/></div>
+      <div class="field"><label>Rechnungsdatum</label><input id="rmDatum" type="date"/></div>
+      <div class="field"><label>Fällig am</label><input id="rmFaellig" type="date"/></div>
+      <div class="field full"><label>Bemerkung</label><input id="rmBemerkung" type="text" placeholder="Betreuung Januar 2026"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="rmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('rechModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: NACHRICHT ── -->
+<div class="modal-overlay" id="nachrichtModal" onclick="if(event.target===this)closeModal('nachrichtModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="nachrichtModalTitle">Neue Nachricht</div>
+    <div class="modal-grid">
+      <div class="field full"><label>Betreff</label><input id="nmBetreff" type="text" placeholder="Betreff der Nachricht"/></div>
+      <div class="field"><label>Empfänger</label><select id="nmEmpfaenger"></select></div>
+      <div class="field"><label>Typ</label>
+        <select id="nmTyp">
+          <option value="brief">📄 Elternbrief</option>
+          <option value="email">📧 E-Mail</option>
+        </select>
+      </div>
+      <div class="field"><label>Datum</label><input id="nmDatum" type="date"/></div>
+      <div class="field full"><label>Inhalt</label><textarea id="nmInhalt" class="field-textarea" placeholder="Nachrichteninhalt…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="nmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('nachrichtModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: DIENSTPLAN ── -->
+<div class="modal-overlay" id="dienstModal" onclick="if(event.target===this)closeModal('dienstModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="dienstModalTitle">Neuer Eintrag</div>
+    <div class="modal-grid">
+      <div class="field full"><label>Mitarbeiter/in</label><input id="dmMitarbeiter" type="text" placeholder="Name Mitarbeiter/in"/></div>
+      <div class="field"><label>Datum</label><input id="dmDatum" type="date"/></div>
+      <div class="field"><label>Typ</label>
+        <select id="dmTyp">
+          <option value="betreuung">👶 Betreuung</option>
+          <option value="admin">🏢 Administration</option>
+        </select>
+      </div>
+      <div class="field"><label>Von</label><input id="dmVon" type="time"/></div>
+      <div class="field"><label>Bis</label><input id="dmBis" type="time"/></div>
+      <div class="field full"><label>Aufgabe / Bemerkung</label><input id="dmAufgabe" type="text" placeholder="z.B. Morgenbetreuung"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="dmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('dienstModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: WARTELISTE ── -->
+<div class="modal-overlay" id="warteModal" onclick="if(event.target===this)closeModal('warteModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="warteModalTitle">Auf Warteliste setzen</div>
+    <div class="modal-grid">
+      <div class="field full"><label>Name des Kindes</label><input id="wmName" type="text" placeholder="Vorname Nachname"/></div>
+      <div class="field"><label>Geburtsdatum</label><input id="wmGeb" type="date"/></div>
+      <div class="field"><label>Elternteil / Kontakt</label><input id="wmEltern" type="text" placeholder="Name Elternteil"/></div>
+      <div class="field"><label>Anmeldedatum</label><input id="wmAnmeldung" type="date"/></div>
+      <div class="field"><label>Gewünschter Eintritt</label><input id="wmGewuenscht" type="date"/></div>
+      <div class="field"><label>Priorität</label><input id="wmPrio" type="number" placeholder="1" min="1"/></div>
+      <div class="field full"><label>Bemerkung</label><input id="wmBemerkung" type="text" placeholder="z.B. Geschwisterkind"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="wmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('warteModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: FERIEN ── -->
+<div class="modal-overlay" id="ferienModal" onclick="if(event.target===this)closeModal('ferienModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="ferienModalTitle">Neuer Eintrag</div>
+    <div class="modal-grid">
+      <div class="field full"><label>Bezeichnung</label><input id="fmBez" type="text" placeholder="Sommerferien 2026"/></div>
+      <div class="field"><label>Von</label><input id="fmVon" type="date"/></div>
+      <div class="field"><label>Bis</label><input id="fmBis" type="date"/></div>
+      <div class="field"><label>Typ</label>
+        <select id="fmTyp">
+          <option value="schliesszeit">🔒 Schliesszeit</option>
+          <option value="ferienprogramm">🎉 Ferienprogramm</option>
+          <option value="betrieb">📅 Normalbetrieb</option>
+        </select>
+      </div>
+      <div class="field full"><label>Bemerkung</label><input id="fmBemerkung" type="text" placeholder="z.B. Notbetreuung auf Anfrage"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="fmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('ferienModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: DOKUMENT ── -->
+<div class="modal-overlay" id="dokumentModal" onclick="if(event.target===this)closeModal('dokumentModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="dokumentModalTitle">Neues Dokument</div>
+    <div class="modal-grid">
+      <div class="field full"><label>Titel</label><input id="dkmTitel" type="text" placeholder="z.B. Betreuungsvertrag 2026"/></div>
+      <div class="field"><label>Zugehöriges Kind</label><select id="dkmKind"></select></div>
+      <div class="field"><label>Typ</label>
+        <select id="dkmTyp">
+          <option value="vertrag">📄 Vertrag</option>
+          <option value="formular">📝 Formular</option>
+          <option value="notiz">🗒️ Notiz</option>
+          <option value="link">🔗 Link</option>
+        </select>
+      </div>
+      <div class="field"><label>Datum</label><input id="dkmDatum" type="date"/></div>
+      <div class="field full"><label>Link / URL (optional)</label><input id="dkmLink" type="url" placeholder="https://drive.google.com/…"/></div>
+      <div class="field full"><label>Notiz / Inhalt</label><textarea id="dkmNotiz" class="field-textarea" placeholder="Notizen zum Dokument…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="dkmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('dokumentModal')">Abbrechen</button>
     </div>
   </div>
 </div>
