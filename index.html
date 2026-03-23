@@ -35,6 +35,7 @@ let kinder=[], tarife=[], anwesenheiten=[], rechnungen=[];
 let nachrichten=[], dienstplaene=[], warteliste=[], ferien=[];
 let dokumente=[], mitarbeiter=[], essensplaene=[], vertraege=[];
 let beobachtungen=[], tagesstrukturen=[];
+let einkaufslisten=[], unfaelle=[], kesb=[];
 let unsubs = [];
 
 const DEFAULT_TARIFE = [
@@ -84,6 +85,9 @@ async function subscribeAll() {
     onSnapshot(collection(db,"kunden",uid,"vertraege"),        snap=>{ vertraege=snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }),
     onSnapshot(collection(db,"kunden",uid,"beobachtungen"),    snap=>{ beobachtungen=snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }),
     onSnapshot(collection(db,"kunden",uid,"tagesstrukturen"),  snap=>{ tagesstrukturen=snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }),
+    onSnapshot(collection(db,"kunden",uid,"einkaufslisten"),   snap=>{ einkaufslisten=snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }),
+    onSnapshot(collection(db,"kunden",uid,"unfaelle"),         snap=>{ unfaelle=snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }),
+    onSnapshot(collection(db,"kunden",uid,"kesb"),             snap=>{ kesb=snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }),
     onSnapshot(collection(db,"kunden",uid,"tarife"), async snap=>{
       if(snap.empty){ for(const t of DEFAULT_TARIFE) await save("tarife",t.id,t); }
       else { tarife = snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }
@@ -128,7 +132,13 @@ window._deleteVertrag   = id=>confirm("Vertrag löschen?")&&del("vertraege",id);
 window._saveBeob       = (d,id)=>save("beobachtungen",id||"beob_"+Date.now(),d).then(ok=>ok&&closeModal("mBeob"));
 window._deleteBeob     = id=>confirm("Löschen?")&&del("beobachtungen",id);
 window._saveTages      = (d,id)=>save("tagesstrukturen",id||"tages_"+Date.now(),d).then(ok=>ok&&closeModal("mTages"));
-window._deleteTages    = id=>confirm("Löschen?")&&del("tagesstrukturen",id);
+window._deleteTages     = id=>confirm("Löschen?")&&del("tagesstrukturen",id);
+window._saveEinkauf    = (d,id)=>save("einkaufslisten",id||"einkauf_"+Date.now(),d).then(ok=>ok&&closeModal("mEinkauf"));
+window._deleteEinkauf  = id=>confirm("Löschen?")&&del("einkaufslisten",id);
+window._saveUnfall     = (d,id)=>save("unfaelle",id||"unfall_"+Date.now(),d).then(ok=>ok&&closeModal("mUnfall"));
+window._deleteUnfall   = id=>confirm("Löschen?")&&del("unfaelle",id);
+window._saveKesb       = (d,id)=>save("kesb",id||"kesb_"+Date.now(),d).then(ok=>ok&&closeModal("mKesb"));
+window._deleteKesb     = id=>confirm("Löschen?")&&del("kesb",id);
 
 window._quickAnw = async(kindId,kindName,status)=>{
   try {
@@ -203,6 +213,7 @@ function renderAll() {
     essensplan:renderEssensplan, notfallkontakte:renderNotfallkontakte,
     eingewoehnung:renderEingewoehnung, vertraege:renderVertraege,
     beobachtungen:renderBeobachtungen, tagesstruktur:renderTagesstruktur,
+    einkaufsliste:renderEinkaufsliste, unfallprotokoll:renderUnfallprotokoll, kesb:renderKesb,
   };
   if(c && map[activeTab]) c.innerHTML = map[activeTab]();
 }
@@ -229,6 +240,7 @@ function renderSidebar() {
     ]},
     {label:"Verpflegung",items:[
       {id:"essensplan",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>`,label:"Essensplan"},
+      {id:"einkaufsliste",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>`,label:"Einkaufsliste"},
     ]},
     {label:"Finanzen",items:[
       {id:"rechnungen",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/></svg>`,label:"Rechnungen"},
@@ -239,6 +251,10 @@ function renderSidebar() {
     ]},
     {label:"Kommunikation",items:[
       {id:"kommunikation",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z"/><path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z"/></svg>`,label:"Kommunikation"},
+    ]},
+    {label:"Protokolle & Recht",items:[
+      {id:"unfallprotokoll",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>`,label:"Unfallprotokoll"},
+      {id:"kesb",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/></svg>`,label:"KESB / Behörden"},
     ]},
     {label:"Planung",items:[
       {id:"forecast",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11 4a1 1 0 10-2 0v4a1 1 0 102 0V7zm-3 1a1 1 0 10-2 0v3a1 1 0 102 0V8zM8 9a1 1 0 00-2 0v2a1 1 0 102 0V9z" clip-rule="evenodd"/></svg>`,label:"Forecast"},
@@ -1694,6 +1710,298 @@ window._openTagesModal=id=>{
   };
 };
 
+// ── EINKAUFSLISTE ─────────────────────────────────────────
+function renderEinkaufsliste() {
+  // Auto-generate items from current week's menu
+  const now=new Date(), sow=new Date(now);
+  sow.setDate(now.getDate()-((now.getDay()||7)-1));
+  const weekDates=[0,1,2,3,4].map(i=>{const d=new Date(sow);d.setDate(sow.getDate()+i);return d.toISOString().slice(0,10);});
+  const weekMenus=essensplaene.filter(e=>weekDates.includes(e.datum));
+
+  const aktiv=[...einkaufslisten].sort((a,b)=>b.datum?.localeCompare(a.datum||"")||0)[0]||null;
+  const items=aktiv?.items||[];
+  const KATS=["🥩 Fleisch & Fisch","🥬 Gemüse & Früchte","🥛 Milchprodukte","🍞 Brot & Backwaren","🧃 Getränke","🧂 Gewürze & Sonstiges","🧹 Reinigung & Haushalt"];
+
+  const checkedCount=items.filter(x=>x.checked).length;
+
+  const rows=items.map((item,i)=>`
+    <tr class="${item.checked?"checked-row":""}">
+      <td><input type="checkbox" ${item.checked?"checked":""} onchange="_toggleItem('${aktiv.id}',${i},this.checked)" style="width:16px;height:16px;cursor:pointer"/></td>
+      <td class="${item.checked?"cell-sub":"cell-main"}" style="${item.checked?"text-decoration:line-through":""}">${item.name||"–"}</td>
+      <td class="cell-sub">${item.menge||""} ${item.einheit||""}</td>
+      <td>${item.kat?`<span style="font-size:11px">${item.kat}</span>`:"–"}</td>
+      <td class="cell-sub">${item.notiz||""}</td>
+      <td><button class="act-btn danger" onclick="_removeItem('${aktiv?.id||""}',${i})">🗑</button></td>
+    </tr>`).join("");
+
+  return `
+  ${statsGrid([
+    {icon:"🛒",val:einkaufslisten.length,lbl:"Listen total",color:"primary"},
+    {icon:"✅",val:checkedCount,lbl:"Erledigt",color:"green"},
+    {icon:"⭕",val:items.length-checkedCount,lbl:"Noch offen",color:items.length-checkedCount>0?"amber":"green"},
+    {icon:"🍽️",val:weekMenus.length,lbl:"Menüs diese Woche"},
+  ])}
+  <div class="toolbar">
+    <button class="btn-primary" onclick="_neueEinkaufsliste()">+ Neue Liste</button>
+    ${aktiv?`<button class="btn-secondary" onclick="_addItemModal('${aktiv.id}')">+ Artikel hinzufügen</button>
+    <button class="btn-secondary" onclick="_autoGenerieren('${aktiv.id}')">🍽️ Aus Menüplan generieren</button>
+    <button class="btn-secondary" onclick="_druckEinkaufsliste('${aktiv.id}')">🖨️ Drucken</button>`:""}
+  </div>
+  ${aktiv?`
+  <div class="table-card mb-4">
+    <div class="table-header">
+      <div>
+        <div class="table-title">📋 ${aktiv.bezeichnung||"Einkaufsliste"}</div>
+        <div class="cell-sub" style="margin-top:2px">${fmtDate(aktiv.datum)} · ${checkedCount}/${items.length} erledigt</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div class="prog-row" style="gap:8px">
+          <div class="prog-bg" style="width:100px"><div class="prog-fill" style="width:${items.length?Math.round(checkedCount/items.length*100):0}%;background:var(--green)"></div></div>
+          <span class="cell-sub">${items.length?Math.round(checkedCount/items.length*100):0}%</span>
+        </div>
+        <button class="act-btn danger" onclick="_deleteEinkauf('${aktiv.id}')">🗑 Liste löschen</button>
+      </div>
+    </div>
+    <table><thead><tr>${["","Artikel","Menge","Kategorie","Notiz",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows||emptyRow(6,"Keine Artikel. Klicke auf '+ Artikel' oder 'Aus Menüplan generieren'.")}</tbody></table>
+  </div>`:`<div class="table-card" style="padding:40px;text-align:center"><div class="cell-sub">Noch keine Einkaufsliste. Klicke auf "+ Neue Liste".</div></div>`}
+  ${einkaufslisten.length>1?`
+  <div class="table-card">
+    <div class="table-header"><span class="table-title">Alle Listen</span></div>
+    <table><thead><tr>${["Bezeichnung","Datum","Artikel","Erledigt",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${[...einkaufslisten].sort((a,b)=>b.datum?.localeCompare(a.datum||"")||0).map((l,i)=>`
+      <tr><td class="cell-main">${l.bezeichnung||"–"}</td><td class="cell-sub">${fmtDate(l.datum)}</td>
+      <td>${l.items?.length||0}</td>
+      <td>${pill((l.items?.filter(x=>x.checked).length||0)+"/"+(l.items?.length||0),"green")}</td>
+      <td><div class="row-actions">
+        <button class="btn-xs primary" onclick="_aktiviereEinkauf('${l.id}')">Öffnen</button>
+        <button class="act-btn" onclick="_druckEinkaufsliste('${l.id}')">🖨️</button>
+        <button class="act-btn danger" onclick="_deleteEinkauf('${l.id}')">🗑</button>
+      </div></td></tr>`).join("")}</tbody></table>
+  </div>`:""}`;
+}
+
+window._neueEinkaufsliste=()=>{
+  const bez=prompt("Bezeichnung der Einkaufsliste (z.B. KW 13):", "Einkaufsliste "+new Date().toLocaleDateString("de-CH",{day:"2-digit",month:"2-digit"}));
+  if(!bez)return;
+  save("einkaufslisten","einkauf_"+Date.now(),{bezeichnung:bez,datum:new Date().toISOString().slice(0,10),items:[],aktiv:true});
+};
+window._aktiviereEinkauf=id=>{
+  const l=einkaufslisten.find(x=>x.id===id); if(!l)return;
+  save("einkaufslisten",id,{...l,aktiv:true});
+};
+window._toggleItem=async(listId,idx,checked)=>{
+  const l=einkaufslisten.find(x=>x.id===listId); if(!l)return;
+  const items=[...l.items]; items[idx]={...items[idx],checked};
+  await save("einkaufslisten",listId,{...l,items});
+};
+window._removeItem=async(listId,idx)=>{
+  const l=einkaufslisten.find(x=>x.id===listId); if(!l)return;
+  const items=l.items.filter((_,i)=>i!==idx);
+  await save("einkaufslisten",listId,{...l,items});
+};
+window._addItemModal=id=>{
+  openModal("mEinkauf","einkaufTitle","Artikel hinzufügen");
+  setFields({eiName:"",eiMenge:"",eiEinheit:"Stk",eiKat:"🥬 Gemüse & Früchte",eiNotiz:""});
+  $("eiSave").onclick=async()=>{
+    const name=$("eiName").value.trim(); if(!name){alert("Name angeben!");return;}
+    const l=einkaufslisten.find(x=>x.id===id); if(!l)return;
+    const items=[...(l.items||[]),{name,menge:$("eiMenge").value.trim(),einheit:$("eiEinheit").value,kat:$("eiKat").value,notiz:$("eiNotiz").value.trim(),checked:false}];
+    await save("einkaufslisten",id,{...l,items});
+    closeModal("mEinkauf");
+  };
+};
+window._autoGenerieren=async(listId)=>{
+  const l=einkaufslisten.find(x=>x.id===listId); if(!l)return;
+  const now=new Date(), sow=new Date(now);
+  sow.setDate(now.getDate()-((now.getDay()||7)-1));
+  const weekDates=[0,1,2,3,4].map(i=>{const d=new Date(sow);d.setDate(sow.getDate()+i);return d.toISOString().slice(0,10);});
+  const menus=essensplaene.filter(e=>weekDates.includes(e.datum));
+  if(!menus.length){alert("Keine Menüs für diese Woche erfasst.");return;}
+  const generated=[];
+  menus.forEach(m=>{
+    if(m.mittagessen) generated.push({name:m.mittagessen,menge:"",einheit:"",kat:"🥩 Fleisch & Fisch",notiz:`${fmtDate(m.datum)}`,checked:false});
+    if(m.znueni) generated.push({name:m.znueni,menge:"",einheit:"",kat:"🧃 Getränke",notiz:`Znüni ${fmtDate(m.datum)}`,checked:false});
+  });
+  const items=[...(l.items||[]),...generated];
+  await save("einkaufslisten",listId,{...l,items});
+  alert(`${generated.length} Artikel aus ${menus.length} Menüs hinzugefügt ✅`);
+};
+window._druckEinkaufsliste=id=>{
+  const l=einkaufslisten.find(x=>x.id===id); if(!l)return;
+  const items=l.items||[];
+  const byKat={};
+  items.forEach(item=>{const k=item.kat||"🧂 Sonstiges";if(!byKat[k])byKat[k]=[];byKat[k].push(item);});
+  const katBlocks=Object.entries(byKat).map(([kat,its])=>`
+    <div style="margin-bottom:8mm">
+      <div style="font-size:10pt;font-weight:700;color:#2563EB;border-bottom:1pt solid #e2e8f0;padding-bottom:2mm;margin-bottom:3mm">${kat}</div>
+      <table style="width:100%">
+        ${its.map(item=>`<tr style="${item.checked?"opacity:.5":""}">
+          <td style="width:8mm;padding:2mm 0"><div style="width:12px;height:12px;border:1.5pt solid #cbd5e1;border-radius:2px;${item.checked?"background:#16a34a":""}"></div></td>
+          <td style="padding:2mm 4mm;font-size:10pt;${item.checked?"text-decoration:line-through;color:#94a3b8":""}">${esc(item.name)}</td>
+          <td style="padding:2mm;font-size:9pt;color:#64748b;width:30mm">${esc(item.menge)} ${esc(item.einheit)}</td>
+          <td style="padding:2mm;font-size:9pt;color:#94a3b8">${esc(item.notiz||"")}</td>
+        </tr>`).join("")}
+      </table>
+    </div>`).join("");
+  const done=items.filter(x=>x.checked).length;
+  const parts=[
+    "<!DOCTYPE html><html lang='de'><head><meta charset='UTF-8'><title>Einkaufsliste<\/title>",
+    "<style>@page{size:A4;margin:15mm}*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:11pt;color:#111}",
+    ".hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:5mm;border-bottom:2pt solid #2563EB;margin-bottom:6mm}",
+    ".logo{font-size:16pt;font-weight:900;color:#2563EB}.meta{font-size:9pt;color:#64748b;text-align:right}",
+    ".progress{background:#f1f5f9;border-radius:4px;height:6px;margin:4mm 0;overflow:hidden}",
+    ".progress-fill{height:100%;background:#16a34a;border-radius:4px}",
+    "@media print{body{-webkit-print-color-adjust:exact}}<\/style><\/head><body>",
+    "<div class='hdr'><div><div class='logo'>&#127968; "+esc(KITA.name)+"<\/div>",
+    "<div style='font-size:9pt;color:#64748b;margin-top:2px'>"+esc(l.bezeichnung||"Einkaufsliste")+"<\/div><\/div>",
+    "<div class='meta'>"+fmtDate(l.datum)+"<br>"+done+"\/"+items.length+" erledigt<\/div><\/div>",
+    "<div class='progress'><div class='progress-fill' style='width:"+Math.round(done/(items.length||1)*100)+"%'><\/div><\/div>",
+    katBlocks,
+    "<div style='margin-top:8mm;font-size:8pt;color:#94a3b8;border-top:1pt solid #e2e8f0;padding-top:3mm'>"+esc(KITA.name)+" &bull; Gedruckt: "+new Date().toLocaleDateString("de-CH")+"<\/div>",
+    "<\/body><\/html>"
+  ];
+  const w=window.open("","_blank"); w.document.write(parts.join("\n")); w.document.close();
+  setTimeout(()=>{try{w.print();}catch(e){}},600);
+};
+
+// ── UNFALLPROTOKOLL ───────────────────────────────────────
+function renderUnfallprotokoll() {
+  const offen=unfaelle.filter(u=>u.status==="offen"||!u.status);
+  const rows=[...unfaelle].sort((a,b)=>b.datum?.localeCompare(a.datum||"")||0).map((u,i)=>`
+    <tr>
+      <td class="cell-sub">${fmtDate(u.datum)} ${u.zeit||""}</td>
+      <td class="cell-main">${u.kindName||"–"}</td>
+      <td>${u.art||"–"}</td>
+      <td class="cell-sub" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.beschreibung||"–"}</td>
+      <td>${u.verletzung||"–"}</td>
+      <td>${u.elternInfo?pill("Eltern info.","green"):pill("Ausstehend","amber")}</td>
+      <td>${u.arzt?pill("Arzt konst.","red"):pill("Kein Arzt","slate")}</td>
+      <td><div class="row-actions">
+        <button class="act-btn" onclick="_openUnfallModal('${u.id}')">✏️</button>
+        <button class="act-btn" onclick="_druckUnfall('${u.id}')">🖨️</button>
+        <button class="act-btn danger" onclick="_deleteUnfall('${u.id}')">🗑</button>
+      </div></td>
+    </tr>`).join("");
+  return `
+  <div class="section-intro">⚠️ <strong>Unfallprotokoll</strong> — Pflicht gemäss Art. 68 KiBeG. Alle Verletzungen und Vorfälle müssen dokumentiert werden. SUVA-relevant bei Unfällen.</div>
+  ${statsGrid([
+    {icon:"🚨",val:unfaelle.length,lbl:"Total Einträge"},
+    {icon:"📋",val:offen.length,lbl:"Offen",color:"amber"},
+    {icon:"👨‍⚕️",val:unfaelle.filter(u=>u.arzt).length,lbl:"Arzt konsultiert",color:"red"},
+    {icon:"✅",val:unfaelle.filter(u=>u.elternInfo).length,lbl:"Eltern informiert",color:"green"},
+  ])}
+  <div class="toolbar">
+    <button class="btn-primary" onclick="_openUnfallModal()">+ Vorfall erfassen</button>
+  </div>
+  <div class="table-card">
+    <table><thead><tr>${["Datum/Zeit","Kind","Art","Beschreibung","Verletzung","Eltern","Arzt",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows||emptyRow(8,"Keine Vorfälle erfasst.")}</tbody></table>
+  </div>`;
+}
+window._openUnfallModal=id=>{
+  const u=id?unfaelle.find(x=>x.id===id):null;
+  const f=u||{datum:new Date().toISOString().slice(0,10),zeit:new Date().toTimeString().slice(0,5),kindId:"",art:"Sturz",beschreibung:"",verletzung:"",ersthelfer:"",massnahmen:"",elternInfo:false,arzt:false,suva:false,status:"offen"};
+  openModal("mUnfall","unfallTitle",u?"Vorfall bearbeiten":"Vorfall erfassen");
+  const sel=$("unfallKind");
+  sel.innerHTML=`<option value="">– Kind wählen –</option>`+kinder.map(k=>`<option value="${k.id}" data-name="${k.name}"${f.kindId===k.id?" selected":""}>${k.name}</option>`).join("");
+  setFields({unfallDatum:f.datum,unfallZeit:f.zeit,unfallArt:f.art,unfallBeschr:f.beschreibung,unfallVerletz:f.verletzung,unfallErsthelfer:f.ersthelfer,unfallMassnahmen:f.massnahmen,unfallElternInfo:f.elternInfo,unfallArzt:f.arzt,unfallSuva:f.suva});
+  $("unfallSave").onclick=()=>{
+    const opt=sel.options[sel.selectedIndex];
+    _saveUnfall({datum:$("unfallDatum").value,zeit:$("unfallZeit").value,kindId:sel.value,kindName:opt?.dataset.name||"",art:$("unfallArt").value,beschreibung:$("unfallBeschr").value.trim(),verletzung:$("unfallVerletz").value.trim(),ersthelfer:$("unfallErsthelfer").value.trim(),massnahmen:$("unfallMassnahmen").value.trim(),elternInfo:$("unfallElternInfo").checked,arzt:$("unfallArzt").checked,suva:$("unfallSuva").checked,status:"offen"},id||null);
+  };
+};
+window._druckUnfall=id=>{
+  const u=unfaelle.find(x=>x.id===id); if(!u)return;
+  const k=kinder.find(x=>x.id===u.kindId)||{};
+  const parts=[
+    "<!DOCTYPE html><html lang='de'><head><meta charset='UTF-8'><title>Unfallprotokoll<\/title>",
+    "<style>@page{size:A4;margin:18mm}*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:11pt;color:#111;line-height:1.5}",
+    ".hdr{display:flex;justify-content:space-between;padding-bottom:5mm;border-bottom:2pt solid #dc2626;margin-bottom:7mm}",
+    ".logo{font-size:15pt;font-weight:900;color:#dc2626}.badge{background:#fee2e2;color:#dc2626;padding:3px 10px;border-radius:4px;font-size:9pt;font-weight:700;margin-top:4px;display:inline-block}",
+    "h3{font-size:10pt;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#64748b;margin:5mm 0 2mm;border-bottom:1pt solid #f1f5f9;padding-bottom:1mm}",
+    ".grid{display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-bottom:2mm}",
+    ".field label{font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;display:block}",
+    ".field .val{font-size:11pt;font-weight:600;border-bottom:1pt solid #e2e8f0;padding:1mm 0;min-height:8mm}",
+    ".check-row{display:flex;align-items:center;gap:6px;margin:2mm 0;font-size:10pt}",
+    ".check-box{width:14px;height:14px;border:1.5pt solid #cbd5e1;border-radius:2px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9pt}",
+    ".sig{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8mm;margin-top:12mm}",
+    ".sig-line{border-top:1pt solid #111;padding-top:2mm;font-size:8pt;color:#64748b}",
+    ".footer{margin-top:8mm;font-size:8pt;color:#94a3b8;border-top:1pt solid #e2e8f0;padding-top:3mm}",
+    "@media print{body{-webkit-print-color-adjust:exact}}<\/style><\/head><body>",
+    "<div class='hdr'><div><div class='logo'>🏡 "+esc(KITA.name)+" — Unfallprotokoll<\/div>",
+    "<div style='font-size:8pt;color:#64748b'>"+esc(KITA.strasse)+", "+KITA.plz+" "+esc(KITA.ort)+"<\/div>",
+    "<div class='badge'>⚠️ VERTRAULICH — NUR FÜR INTERNE AKTEN<\/div><\/div>",
+    "<div style='text-align:right;font-size:9pt;color:#64748b'>Erfasst: "+new Date().toLocaleDateString("de-CH")+"<br>"+esc(KITA.uid)+"<\/div><\/div>",
+    "<h3>Angaben zum Kind<\/h3><div class='grid'>",
+    "<div class='field'><label>Name<\/label><div class='val'>"+esc(u.kindName||"–")+"<\/div><\/div>",
+    "<div class='field'><label>Geburtsdatum<\/label><div class='val'>"+fmtDate(k.geb)+"<\/div><\/div>",
+    "<div class='field'><label>Erziehungsberechtigte<\/label><div class='val'>"+esc(k.eltern||"–")+"<\/div><\/div>",
+    "<div class='field'><label>Betreuungstage<\/label><div class='val'>"+(k.tage?.join(", ")||"–")+"<\/div><\/div><\/div>",
+    "<h3>Angaben zum Vorfall<\/h3><div class='grid'>",
+    "<div class='field'><label>Datum<\/label><div class='val'>"+fmtDate(u.datum)+"<\/div><\/div>",
+    "<div class='field'><label>Uhrzeit<\/label><div class='val'>"+(u.zeit||"–")+"<\/div><\/div>",
+    "<div class='field'><label>Art des Vorfalls<\/label><div class='val'>"+esc(u.art||"–")+"<\/div><\/div>",
+    "<div class='field'><label>Ersthelfer/in<\/label><div class='val'>"+esc(u.ersthelfer||"–")+"<\/div><\/div><\/div>",
+    "<div class='field' style='margin-bottom:4mm'><label>Beschreibung des Vorfalls<\/label><div class='val' style='min-height:16mm'>"+esc(u.beschreibung||"")+"<\/div><\/div>",
+    "<div class='field' style='margin-bottom:4mm'><label>Verletzung / Befund<\/label><div class='val' style='min-height:12mm'>"+esc(u.verletzung||"")+"<\/div><\/div>",
+    "<div class='field' style='margin-bottom:4mm'><label>Getroffene Massnahmen<\/label><div class='val' style='min-height:12mm'>"+esc(u.massnahmen||"")+"<\/div><\/div>",
+    "<h3>Massnahmen &amp; Meldungen<\/h3>",
+    "<div class='check-row'><div class='check-box'>"+(u.elternInfo?"✓":"")+"<\/div><span>Eltern informiert<\/span><\/div>",
+    "<div class='check-row'><div class='check-box'>"+(u.arzt?"✓":"")+"<\/div><span>Arzt \/ Notaufnahme konsultiert<\/span><\/div>",
+    "<div class='check-row'><div class='check-box'>"+(u.suva?"✓":"")+"<\/div><span>SUVA-Meldung erfolgt<\/span><\/div>",
+    "<div class='sig'><div class='sig-line'>Unterschrift Leiterin<\/div><div class='sig-line'>Unterschrift Mitarbeiter\/in<\/div><div class='sig-line'>Unterschrift Elternteil<\/div><\/div>",
+    "<div class='footer'>"+esc(KITA.name)+" &bull; Unfallprotokoll &bull; "+fmtDate(u.datum)+" &bull; "+esc(u.kindName||"")+"<\/div>",
+    "<\/body><\/html>"
+  ];
+  const w=window.open("","_blank"); w.document.write(parts.join("\n")); w.document.close();
+  setTimeout(()=>{try{w.print();}catch(e){}},600);
+};
+
+// ── KESB / BEHÖRDEN ───────────────────────────────────────
+function renderKesb() {
+  const rows=[...kesb].sort((a,b)=>b.datum?.localeCompare(a.datum||"")||0).map((k,i)=>`
+    <tr>
+      <td class="cell-sub">${fmtDate(k.datum)}</td>
+      <td class="cell-main">${k.kindName||"Allgemein"}</td>
+      <td>${pill(k.typ||"Kontakt",k.typ==="Meldung"?"red":k.typ==="Massnahme"?"amber":"primary")}</td>
+      <td>${k.behoerde||"–"}</td>
+      <td class="cell-sub" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${k.beschreibung||"–"}</td>
+      <td>${k.status==="abgeschlossen"?pill("Abgeschlossen","green"):pill("Laufend","amber")}</td>
+      <td><div class="row-actions">
+        <button class="act-btn" onclick="_openKesbModal('${k.id}')">✏️</button>
+        <button class="act-btn danger" onclick="_deleteKesb('${k.id}')">🗑</button>
+      </div></td>
+    </tr>`).join("");
+  return `
+  <div class="section-intro">⚖️ <strong>KESB / Behördenkontakte</strong> — Dokumentation aller Behördenkontakte, Kindesschutzmeldungen und Massnahmen gemäss Art. 314 ZGB. Vertraulich.</div>
+  ${statsGrid([
+    {icon:"📁",val:kesb.length,lbl:"Einträge total"},
+    {icon:"🚨",val:kesb.filter(k=>k.typ==="Meldung").length,lbl:"Meldungen",color:"red"},
+    {icon:"⚖️",val:kesb.filter(k=>k.typ==="Massnahme").length,lbl:"Massnahmen",color:"amber"},
+    {icon:"✅",val:kesb.filter(k=>k.status==="abgeschlossen").length,lbl:"Abgeschlossen",color:"green"},
+  ])}
+  <div class="toolbar">
+    <button class="btn-primary" onclick="_openKesbModal()">+ Eintrag erfassen</button>
+  </div>
+  <div class="table-card">
+    <table><thead><tr>${["Datum","Kind","Typ","Behörde","Beschreibung","Status",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows||emptyRow(7,"Keine KESB-Einträge. Alle Kindesschutzmeldungen und Behördenkontakte hier erfassen.")}</tbody></table>
+  </div>`;
+}
+window._openKesbModal=id=>{
+  const k=id?kesb.find(x=>x.id===id):null;
+  const f=k||{datum:new Date().toISOString().slice(0,10),kindId:"",typ:"Kontakt",behoerde:"",beschreibung:"",massnahmen:"",naechsteSchritte:"",status:"laufend",vertraulich:true};
+  openModal("mKesb","kesbTitle",k?"Eintrag bearbeiten":"KESB / Behördenkontakt");
+  const sel=$("kesbKind");
+  sel.innerHTML=`<option value="">Allgemein (kein spez. Kind)</option>`+kinder.map(ki=>`<option value="${ki.id}" data-name="${ki.name}"${f.kindId===ki.id?" selected":""}>${ki.name}</option>`).join("");
+  setFields({kesbDatum:f.datum,kesbTyp:f.typ,kesbBehoerde:f.behoerde,kesbBeschr:f.beschreibung,kesbMassnahmen:f.massnahmen||"",kesbNaechste:f.naechsteSchritte||"",kesbStatus:f.status,kesbVertraulich:f.vertraulich!==false});
+  $("kesbSave").onclick=()=>{
+    const opt=sel.options[sel.selectedIndex];
+    _saveKesb({datum:$("kesbDatum").value,kindId:sel.value,kindName:opt?.dataset.name||"",typ:$("kesbTyp").value,behoerde:$("kesbBehoerde").value.trim(),beschreibung:$("kesbBeschr").value.trim(),massnahmen:$("kesbMassnahmen").value.trim(),naechsteSchritte:$("kesbNaechste").value.trim(),status:$("kesbStatus").value,vertraulich:$("kesbVertraulich").checked},id||null);
+  };
+};
+
 // ── SHOW/HIDE ─────────────────────────────────────────────
 
 function showLogin(){$("loginScreen").style.display="flex";$("appScreen").style.display="none";}
@@ -2292,6 +2600,7 @@ td .cell-sub { margin-top: 0; }
 .btn-cancel:hover { background: var(--bg); color: var(--text-2); }
 
 /* ── RESPONSIVE ─────────────────────────────────────────── */
+.checked-row td { opacity: .5; }
 @media (max-width: 1024px) {
   :root { --sidebar-w: 68px; }
   .nav-group-label, .sidebar-logo-text, .sidebar-logo-sub, #userEmail, .logout-btn span:not(:first-child) { display: none; }
@@ -2732,6 +3041,102 @@ td .cell-sub { margin-top: 0; }
     <div class="modal-footer">
       <button class="btn-save" id="tagesSave">Speichern</button>
       <button class="btn-cancel" onclick="closeModal('mTages')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EINKAUF ARTIKEL -->
+<div class="modal-overlay" id="mEinkauf" onclick="if(event.target===this)closeModal('mEinkauf')">
+  <div class="modal-box" style="max-width:460px">
+    <div class="modal-title" id="einkaufTitle">Artikel hinzufügen</div>
+    <div class="form-grid">
+      <div class="field full"><label>Artikelname</label><input id="eiName" type="text" placeholder="z.B. Karotten, Milch, Poulet…"/></div>
+      <div class="field"><label>Menge</label><input id="eiMenge" type="text" placeholder="z.B. 2, 500, 1"/></div>
+      <div class="field"><label>Einheit</label>
+        <select id="eiEinheit">
+          <option value="Stk">Stk</option><option value="kg">kg</option><option value="g">g</option>
+          <option value="L">L</option><option value="dl">dl</option><option value="Pkg">Pkg</option>
+          <option value="Bund">Bund</option><option value="Dose">Dose</option><option value="Flasche">Flasche</option>
+        </select>
+      </div>
+      <div class="field full"><label>Kategorie</label>
+        <select id="eiKat">
+          <option>🥩 Fleisch & Fisch</option><option>🥬 Gemüse & Früchte</option>
+          <option>🥛 Milchprodukte</option><option>🍞 Brot & Backwaren</option>
+          <option>🧃 Getränke</option><option>🧂 Gewürze & Sonstiges</option>
+          <option>🧹 Reinigung & Haushalt</option>
+        </select>
+      </div>
+      <div class="field full"><label>Notiz</label><input id="eiNotiz" type="text" placeholder="Optional"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="eiSave">Hinzufügen</button>
+      <button class="btn-cancel" onclick="closeModal('mEinkauf')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: UNFALL -->
+<div class="modal-overlay" id="mUnfall" onclick="if(event.target===this)closeModal('mUnfall')">
+  <div class="modal-box" style="max-width:600px">
+    <div class="modal-title" id="unfallTitle">Vorfall / Unfall erfassen</div>
+    <div class="form-grid">
+      <div class="field"><label>Datum</label><input id="unfallDatum" type="date"/></div>
+      <div class="field"><label>Uhrzeit</label><input id="unfallZeit" type="time"/></div>
+      <div class="field full"><label>Kind</label><select id="unfallKind"></select></div>
+      <div class="field"><label>Art des Vorfalls</label>
+        <select id="unfallArt">
+          <option>Sturz</option><option>Schnittverletzung</option><option>Prellung</option>
+          <option>Beissvorfall</option><option>Vergiftungsverdacht</option><option>Allergie-Reaktion</option>
+          <option>Erkrankung</option><option>Konflikt</option><option>Sonstiges</option>
+        </select>
+      </div>
+      <div class="field"><label>Ersthelfer/in</label><input id="unfallErsthelfer" type="text" placeholder="Name der betreuenden Person"/></div>
+      <div class="field full"><label>Beschreibung des Vorfalls</label><textarea id="unfallBeschr" style="min-height:80px" placeholder="Was ist passiert? Wo? Wie?"></textarea></div>
+      <div class="field full"><label>Verletzung / Befund</label><input id="unfallVerletz" type="text" placeholder="z.B. Schürfwunde am Knie, ca. 2cm"/></div>
+      <div class="field full"><label>Getroffene Massnahmen</label><textarea id="unfallMassnahmen" placeholder="z.B. Wunde gereinigt, Pflaster, Eis aufgelegt…"></textarea></div>
+      <div class="field"><label class="modal-check"><input id="unfallElternInfo" type="checkbox"/> Eltern informiert</label></div>
+      <div class="field"><label class="modal-check"><input id="unfallArzt" type="checkbox"/> Arzt / Notaufnahme</label></div>
+      <div class="field full"><label class="modal-check"><input id="unfallSuva" type="checkbox"/> SUVA-Meldung erfolgt</label></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="unfallSave">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('mUnfall')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: KESB -->
+<div class="modal-overlay" id="mKesb" onclick="if(event.target===this)closeModal('mKesb')">
+  <div class="modal-box" style="max-width:580px">
+    <div class="modal-title" id="kesbTitle">KESB / Behördenkontakt</div>
+    <div class="form-grid">
+      <div class="field"><label>Datum</label><input id="kesbDatum" type="date"/></div>
+      <div class="field"><label>Typ</label>
+        <select id="kesbTyp">
+          <option value="Kontakt">📞 Kontakt / Gespräch</option>
+          <option value="Meldung">🚨 Kindesschutzmeldung</option>
+          <option value="Massnahme">⚖️ Behördliche Massnahme</option>
+          <option value="Abklaerung">🔍 Abklärung</option>
+          <option value="Besprechung">👥 Fachbesprechung</option>
+        </select>
+      </div>
+      <div class="field full"><label>Kind (optional)</label><select id="kesbKind"></select></div>
+      <div class="field full"><label>Behörde / Kontaktperson</label><input id="kesbBehoerde" type="text" placeholder="z.B. KESB Region Bülach, Schulsozialarbeit…"/></div>
+      <div class="field full"><label>Beschreibung / Inhalt</label><textarea id="kesbBeschr" style="min-height:90px" placeholder="Was wurde besprochen / gemeldet?"></textarea></div>
+      <div class="field full"><label>Getroffene Massnahmen</label><textarea id="kesbMassnahmen" placeholder="z.B. Gefährdungsmeldung eingereicht, Elterngespräch angesetzt…"></textarea></div>
+      <div class="field full"><label>Nächste Schritte / Fristen</label><input id="kesbNaechste" type="text" placeholder="z.B. Verlaufsbericht bis 30.04.2026"/></div>
+      <div class="field"><label>Status</label>
+        <select id="kesbStatus">
+          <option value="laufend">🔄 Laufend</option>
+          <option value="abgeschlossen">✅ Abgeschlossen</option>
+        </select>
+      </div>
+      <div class="field"><label class="modal-check"><input id="kesbVertraulich" type="checkbox" checked/> Vertraulich (nur intern)</label></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="kesbSave">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('mKesb')">Abbrechen</button>
     </div>
   </div>
 </div>
