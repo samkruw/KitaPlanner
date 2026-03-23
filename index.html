@@ -193,7 +193,7 @@ const KITA_COLORS = {
 };
 
 // ── TABS ──────────────────────────────────────────────────
-let activeTab = "belegung";
+let activeTab = "dashboard";
 window._setTab = t => { activeTab=t; renderAll(); };
 window.closeModal = id => $(id)?.classList.remove("open");
 
@@ -203,7 +203,7 @@ function renderAll() {
   renderTopbar();
   const c=$("tabContent");
   const map={
-    belegung:renderBelegung, anwesenheit:renderAnwesenheit,
+    dashboard:renderDashboard, belegung:renderBelegung, anwesenheit:renderAnwesenheit, anwesenheitStats:renderAnwesenheitStats,
     rechnungen:renderRechnungen, kommunikation:renderKommunikation,
     dienstplan:renderDienstplan, mitarbeiter:renderMitarbeiter,
     warteliste:renderWarteliste, ferien:renderFerien,
@@ -222,10 +222,14 @@ function renderSidebar() {
   const nav=$("sidebarNav"); if(!nav)return;
   const ueberfaellig=rechnungen.filter(r=>r.status==="offen"&&r.faellig&&r.faellig<new Date().toISOString().slice(0,10)).length;
   const groups=[
+    {label:"Übersicht",items:[
+      {id:"dashboard",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V5a1 1 0 00-1-1H3zm0 8a1 1 0 00-1 1v2a1 1 0 001 1h4a1 1 0 001-1v-2a1 1 0 00-1-1H3zm8-8a1 1 0 00-1 1v2a1 1 0 001 1h4a1 1 0 001-1V5a1 1 0 00-1-1h-4zm0 6a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1v-4a1 1 0 00-1-1h-4z"/></svg>`,label:"Dashboard"},
+    ]},
     {label:"Kinder & Familie",items:[
       {id:"belegung",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/></svg>`,label:"Belegungsliste"},
       {id:"warteliste",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>`,label:"Warteliste",badge:warteliste.length||0},
       {id:"anwesenheit",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>`,label:"Anwesenheit"},
+      {id:"anwesenheitStats",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg>`,label:"Statistik"},
       {id:"notfallkontakte",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/></svg>`,label:"Notfallkontakte"},
       {id:"eingewoehnung",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/></svg>`,label:"Eingewöhnung"},
       {id:"beobachtungen",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>`,label:"Entwicklungsberichte"},
@@ -2002,6 +2006,352 @@ window._openKesbModal=id=>{
   };
 };
 
+// ── DASHBOARD ─────────────────────────────────────────────
+function renderDashboard() {
+  const today = new Date().toISOString().slice(0,10);
+  const now   = new Date();
+
+  // Anwesenheit heute
+  const anwH     = anwesenheiten.filter(a=>a.datum===today);
+  const anwesend = anwH.filter(a=>a.status==="anwesend").length;
+  const abwesend = anwH.filter(a=>a.status==="abwesend").length;
+  const nichtErfasst = kinder.length - anwesend - abwesend;
+
+  // Finanzen
+  const offeneRech = rechnungen.filter(r=>r.status==="offen");
+  const ueberfaellig = offeneRech.filter(r=>r.faellig&&r.faellig<today);
+  const totalOffen = offeneRech.reduce((s,r)=>s+(r.betrag||0),0);
+  const umsatz = Math.round(kinder.reduce((s,k)=>s+monatlich(k),0));
+
+  // Geburtstage nächste 30 Tage
+  const geburtstage = kinder.filter(k=>{
+    if(!k.geb) return false;
+    const geb = new Date(k.geb);
+    const thisYear = new Date(now.getFullYear(), geb.getMonth(), geb.getDate());
+    const nextYear = new Date(now.getFullYear()+1, geb.getMonth(), geb.getDate());
+    const next = thisYear >= now ? thisYear : nextYear;
+    return (next - now) / 86400000 <= 30;
+  }).map(k=>{
+    const geb = new Date(k.geb);
+    const next = new Date(now.getFullYear(), geb.getMonth(), geb.getDate());
+    if(next < now) next.setFullYear(now.getFullYear()+1);
+    const tage = Math.ceil((next-now)/86400000);
+    return {...k, nextBday:next, tageVorher:tage, wirdAlt:now.getFullYear()+(next.getFullYear()>now.getFullYear()?1:0)-geb.getFullYear()};
+  }).sort((a,b)=>a.tageVorher-b.tageVorher);
+
+  // Nächste Events (7 Tage)
+  const in7 = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+  const nextEvents = [...nachrichten].filter(n=>n.datum>=today&&n.datum<=in7)
+    .sort((a,b)=>a.datum.localeCompare(b.datum)).slice(0,5);
+
+  // Warteliste
+  const warteEintritt = warteliste.filter(w=>{
+    if(!w.gewuenscht) return false;
+    const d = new Date(w.gewuenscht);
+    return (d-now)/86400000 <= 60;
+  });
+
+  // Menü heute
+  const menuHeute = essensplaene.find(e=>e.datum===today);
+
+  // Offene Aufgaben summary
+  const freiesPlaetze = Math.max(0, 20-kinder.length);
+  const auslastung = Math.round((kinder.length/20)*100);
+
+  // Anwesenheits-Donut
+  const total = kinder.length||1;
+  const C=2*Math.PI*15.9, anwD=(anwesend/total)*C, offset=C*0.25;
+
+  return `
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+    ${[
+      {icon:"👶",val:kinder.length,lbl:"Kinder total",sub:freiesPlaetze+" Plätze frei",color:"primary"},
+      {icon:"✅",val:anwesend,lbl:"Anwesend heute",sub:abwesend+" abwesend · "+nichtErfasst+" offen",color:"green"},
+      {icon:"💰",val:"CHF "+umsatz.toLocaleString("de-CH"),lbl:"Umsatz/Mt.",sub:auslastung+"% Auslastung",color:"primary"},
+      {icon:"⚠️",val:ueberfaellig.length,lbl:"Überfällig",sub:"CHF "+Math.round(totalOffen).toLocaleString("de-CH")+" offen",color:ueberfaellig.length>0?"red":"green"},
+    ].map(i=>`<div class="dash-kpi">
+      <div class="dash-kpi-icon">${i.icon}</div>
+      <div class="dash-kpi-val ${i.color||""}">${i.val}</div>
+      <div class="dash-kpi-lbl">${i.lbl}</div>
+      ${i.sub?`<div class="dash-kpi-sub">${i.sub}</div>`:""}
+    </div>`).join("")}
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
+
+    
+    <div class="table-card" style="padding:20px">
+      <div class="table-title" style="margin-bottom:14px">📅 Anwesenheit heute</div>
+      <div style="display:flex;align-items:center;gap:20px">
+        <svg width="80" height="80" viewBox="0 0 42 42" style="flex-shrink:0">
+          <circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--border)" stroke-width="5"/>
+          ${anwesend>0?`<circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--green)" stroke-width="5"
+            stroke-dasharray="${((anwesend/total)*C).toFixed(1)} ${(C-(anwesend/total)*C).toFixed(1)}"
+            stroke-dashoffset="${offset.toFixed(1)}" stroke-linecap="round"/>`:""}
+          <text x="21" y="25" text-anchor="middle" font-size="8" font-weight="800" fill="var(--text)">${Math.round((anwesend/total)*100)}%</text>
+        </svg>
+        <div style="flex:1">
+          ${kinder.slice(0,6).map(k=>{
+            const e=anwH.find(a=>a.kindId===k.id);
+            const col=e?.status==="anwesend"?"var(--green)":e?.status==="abwesend"?"var(--red)":"var(--border-2)";
+            return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+              <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></div>
+              <span style="font-size:12px">${k.name}</span>
+              ${!e?`<button class="btn-xs green" style="margin-left:auto;font-size:10px;padding:2px 7px" onclick="_quickAnw('${k.id}','${k.name}','anwesend')">An</button>`:""}
+            </div>`;
+          }).join("")}
+          ${kinder.length>6?`<div class="cell-sub" style="margin-top:4px">+${kinder.length-6} weitere</div>`:""}
+          <button class="btn-xs primary" style="margin-top:8px;width:100%" onclick="_setTab('anwesenheit')">Alle erfassen →</button>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="table-card" style="padding:20px">
+      <div class="table-title" style="margin-bottom:12px">📆 Diese Woche</div>
+      ${nextEvents.length?nextEvents.map(n=>{
+        const ic={monatsbeitrag:"💰",event:"🎉",termin:"📅",info:"ℹ️",brief:"📄"}[n.typ]||"📌";
+        const isToday=n.datum===today;
+        return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:14px">${ic}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.betreff||n.typ}</div>
+            <div class="cell-sub">${isToday?"Heute":fmtDate(n.datum)}</div>
+          </div>
+          ${isToday?`<span style="background:#fef3c7;color:#d97706;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px">Heute</span>`:""}
+        </div>`;
+      }).join(""):`<div class="cell-sub" style="padding:8px 0">Keine Events diese Woche.</div>`}
+      ${geburtstage.length?`<div style="margin-top:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">🎂 Geburtstage</div>
+        ${geburtstage.slice(0,3).map(k=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
+          <span style="font-size:14px">🎂</span>
+          <div style="flex:1"><div style="font-size:12px;font-weight:600">${k.name}</div>
+          <div class="cell-sub">${k.tageVorher===0?"Heute!":k.tageVorher===1?"Morgen":"in "+k.tageVorher+" Tagen"} · wird ${k.wirdAlt}</div></div>
+        </div>`).join("")}
+      </div>`:""}
+    </div>
+
+    
+    <div class="table-card" style="padding:20px">
+      <div class="table-title" style="margin-bottom:12px">🏡 Heute im Überblick</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="dash-info-row">
+          <span class="dash-info-icon">🍽️</span>
+          <div><div style="font-size:12px;font-weight:600">${menuHeute?.mittagessen||"Kein Menü geplant"}</div>
+          <div class="cell-sub">${menuHeute?.znueni?"Znüni: "+menuHeute.znueni:menuHeute?"Kein Znüni":"–"}</div></div>
+        </div>
+        <div class="dash-info-row">
+          <span class="dash-info-icon">👤</span>
+          <div><div style="font-size:12px;font-weight:600">${dienstplaene.filter(d=>d.datum===today).length} Mitarbeiter im Dienst</div>
+          <div class="cell-sub">${dienstplaene.filter(d=>d.datum===today).map(d=>d.mitarbeiter).join(", ")||"Niemand eingetragen"}</div></div>
+        </div>
+        <div class="dash-info-row">
+          <span class="dash-info-icon">⏳</span>
+          <div><div style="font-size:12px;font-weight:600">${warteEintritt.length} Warteliste-Eintritte in 60 Tagen</div>
+          <div class="cell-sub">${warteEintritt.map(w=>w.name).slice(0,2).join(", ")||"Keine"}</div></div>
+        </div>
+        ${ueberfaellig.length?`<div class="dash-info-row" style="background:var(--red-light);border-radius:6px;padding:6px 8px;margin:0 -8px">
+          <span class="dash-info-icon">🚨</span>
+          <div><div style="font-size:12px;font-weight:600;color:var(--red)">${ueberfaellig.length} überfällige Rechnung${ueberfaellig.length>1?"en":""}</div>
+          <div class="cell-sub">CHF ${Math.round(ueberfaellig.reduce((s,r)=>s+(r.betrag||0),0)).toLocaleString("de-CH")}</div></div>
+          <button class="btn-xs red" style="margin-left:auto" onclick="_setTab('mahnwesen')">→</button>
+        </div>`:""}
+      </div>
+    </div>
+
+  </div>
+
+  
+  <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px">
+
+    
+    <div class="table-card">
+      <div class="table-header">
+        <span class="table-title">👶 Kinder — Schnellübersicht</span>
+        <button class="btn-xs primary" onclick="_setTab('belegung')">Alle anzeigen →</button>
+      </div>
+      <table><thead><tr>${["Kind","Alter","Tage","Status","Anwesenheit heute"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>${kinder.slice(0,8).map(k=>{
+        const e=anwH.find(a=>a.kindId===k.id);
+        return `<tr>
+          <td><div class="cell-main">${k.name}</div><div class="cell-sub">${k.eltern||""}</div></td>
+          <td class="cell-sub">${k.geb?age(k.geb)+" J.":"–"}</td>
+          <td><div class="tage-row">${(["Mo","Di","Mi","Do","Fr"]).map(d=>`<span class="tage-pip${k.tage?.includes(d)?" on":""}">${d}</span>`).join("")}</div></td>
+          <td>${k.subv?pill("Subv.","green"):pill("Privat","amber")}</td>
+          <td><div class="row-actions">
+            <button class="btn-xs${e?.status==="anwesend"?" green":e?.status==="abwesend"?" red":" slate"}" onclick="_quickAnw('${k.id}','${k.name}','anwesend')">✅</button>
+            <button class="btn-xs red" onclick="_quickAnw('${k.id}','${k.name}','abwesend')">❌</button>
+          </div></td>
+        </tr>`;}).join("")||emptyRow(5,"Keine Kinder.")}</tbody></table>
+    </div>
+
+    
+    <div class="table-card" style="padding:20px">
+      <div class="table-title" style="margin-bottom:14px">⚡ Schnellaktionen</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${[
+          {label:"+ Kind erfassen",      icon:"👶", action:"_openKindModal()",       color:"primary"},
+          {label:"+ Rechnung erstellen", icon:"🧾", action:"_setTab('rechnungen');_openRechModal()", color:"primary"},
+          {label:"Auto-Rechnungen",      icon:"⚡", action:"_autoRechnungen()",      color:"amber"},
+          {label:"Anwesenheit heute",    icon:"✅", action:"_setTab('anwesenheit')", color:"green"},
+          {label:"+ Vorfall erfassen",   icon:"⚠️", action:"_openUnfallModal()",     color:"red"},
+          {label:"Kita-Einstellungen",   icon:"⚙️", action:"_openKitaSettings()",   color:"slate"},
+        ].map(a=>`<button class="dash-quick-btn" onclick="${a.action}">
+          <span style="font-size:16px">${a.icon}</span>
+          <span style="font-size:12.5px;font-weight:600">${a.label}</span>
+        </button>`).join("")}
+      </div>
+    </div>
+
+  </div>`;
+}
+
+// ── ANWESENHEITS-STATISTIK ─────────────────────────────────
+function renderAnwesenheitStats() {
+  // Letzten 30 Tage berechnen
+  const days30 = Array.from({length:30},(_,i)=>{
+    const d=new Date(Date.now()-i*86400000);
+    return d.toISOString().slice(0,10);
+  }).reverse();
+
+  // Pro Kind: Anwesenheitstage letzte 30 Tage
+  const kindStats = kinder.map(k=>{
+    const eintraege = anwesenheiten.filter(a=>a.kindId===k.id&&days30.includes(a.datum));
+    const anw = eintraege.filter(a=>a.status==="anwesend").length;
+    const abw = eintraege.filter(a=>a.status==="abwesend").length;
+    const sollTage = (k.tage?.length||0) * 4.3; // ~4.3 Wochen pro Monat
+    const quote = sollTage>0 ? Math.round((anw/sollTage)*100) : null;
+    return {...k, anw, abw, erfasst:anw+abw, sollTage:Math.round(sollTage), quote};
+  }).sort((a,b)=>(a.quote||0)-(b.quote||0));
+
+  // Gesamt-Trend letzte 4 Wochen
+  const weeks = [0,1,2,3].map(w=>{
+    const start = new Date(Date.now()-(w+1)*7*86400000);
+    const end   = new Date(Date.now()-w*7*86400000);
+    const wDates = Array.from({length:7},(_,i)=>{
+      const d=new Date(start.getTime()+i*86400000);
+      return d.toISOString().slice(0,10);
+    });
+    const anw = anwesenheiten.filter(a=>wDates.includes(a.datum)&&a.status==="anwesend").length;
+    const lbl = start.toLocaleDateString("de-CH",{day:"numeric",month:"short"});
+    return {lbl, anw, week:w};
+  }).reverse();
+
+  const maxAnw = Math.max(...weeks.map(w=>w.anw), 1);
+
+  // Fehlzeiten-Auswertung
+  const topAbwesend = [...kindStats].sort((a,b)=>b.abw-a.abw).slice(0,5);
+
+  // Heute Stats
+  const today = new Date().toISOString().slice(0,10);
+  const anwH = anwesenheiten.filter(a=>a.datum===today);
+  const anwHeute = anwH.filter(a=>a.status==="anwesend").length;
+
+  const rows = kindStats.map(k=>{
+    const pct = k.quote!==null ? k.quote : null;
+    const col = pct===null?"slate":pct>=90?"green":pct>=70?"amber":"red";
+    // Mini heatmap: last 14 days
+    const last14 = days30.slice(-14).map(d=>{
+      const e = anwesenheiten.find(a=>a.kindId===k.id&&a.datum===d);
+      const c = e?.status==="anwesend"?"var(--green)":e?.status==="abwesend"?"var(--red)":"var(--border)";
+      return `<div style="width:10px;height:10px;border-radius:2px;background:${c}" title="${d}"></div>`;
+    }).join("");
+    return `<tr>
+      <td class="cell-main">${k.name}</td>
+      <td class="fw6" style="color:var(--green)">${k.anw}</td>
+      <td class="fw6" style="color:var(--red)">${k.abw}</td>
+      <td class="cell-sub">${k.sollTage}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="prog-bg" style="width:70px"><div class="prog-fill" style="width:${Math.min(pct||0,100)}%;background:${pct===null?"var(--border)":pct>=90?"var(--green)":pct>=70?"var(--amber)":"var(--red)"}"></div></div>
+          ${pct!==null?pill(pct+"%",col):`<span class="cell-sub">–</span>`}
+        </div>
+      </td>
+      <td><div style="display:flex;gap:2px;flex-wrap:wrap">${last14}</div></td>
+    </tr>`;
+  }).join("");
+
+  return `
+  ${statsGrid([
+    {icon:"📊",val:anwesenheiten.length,lbl:"Einträge total",color:"primary"},
+    {icon:"✅",val:anwHeute,lbl:"Anwesend heute",color:"green"},
+    {icon:"📅",val:anwesenheiten.filter(a=>a.datum>=days30[0]).length,lbl:"Letzte 30 Tage"},
+    {icon:"📈",val:kinder.length?Math.round(anwesenheiten.filter(a=>a.status==="anwesend"&&days30.includes(a.datum)).length/(kinder.length*20)*100)+"%":"–",lbl:"Ø Anwesenheitsquote",color:"green"},
+  ])}
+
+  
+  <div class="table-card mb-4" style="padding:20px">
+    <div class="table-title" style="margin-bottom:16px">📈 Anwesenheits-Trend (4 Wochen)</div>
+    <div style="display:flex;align-items:flex-end;gap:12px;height:80px">
+      ${weeks.map(w=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+        <div style="font-size:11px;color:var(--muted);font-weight:600">${w.anw}</div>
+        <div style="width:100%;border-radius:5px 5px 0 0;background:${w.week===0?"var(--primary)":"var(--primary-mid)"};height:${Math.round((w.anw/maxAnw)*60)+4}px;min-height:4px"></div>
+        <div style="font-size:10px;color:var(--muted)">${w.lbl}</div>
+      </div>`).join("")}
+    </div>
+  </div>
+
+  
+  <div class="table-card mb-4">
+    <div class="table-header">
+      <span class="table-title">👶 Anwesenheit pro Kind (letzte 30 Tage)</span>
+      <button class="btn-secondary" onclick="_druckAnwesenheitStats()">🖨️ Bericht drucken</button>
+    </div>
+    <table><thead><tr>${["Kind","Anwesend","Abwesend","Soll-Tage","Quote","14 Tage Verlauf"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows||emptyRow(6,"Keine Anwesenheitsdaten.")}</tbody></table>
+  </div>
+  ${topAbwesend.some(k=>k.abw>0)?`
+  <div class="table-card" style="padding:20px">
+    <div class="table-title" style="margin-bottom:12px">⚠️ Höchste Fehlzeiten (letzte 30 Tage)</div>
+    ${topAbwesend.filter(k=>k.abw>0).map(k=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <div class="avatar-circle sm">${k.name.split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
+        <div style="flex:1"><div style="font-size:12px;font-weight:600">${k.name}</div>
+        <div class="cell-sub">${k.abw} Fehltage · ${k.anw} Anwesenheiten</div></div>
+        <div class="prog-row" style="gap:6px">
+          <div class="prog-bg" style="width:80px"><div class="prog-fill" style="width:${Math.min((k.abw/(k.anw+k.abw||1))*100,100).toFixed(0)}%;background:var(--red)"></div></div>
+          <span class="cell-sub">${Math.round((k.abw/(k.anw+k.abw||1))*100)}% krank</span>
+        </div>
+      </div>`).join("")}
+  </div>`:""}`;
+}
+
+window._druckAnwesenheitStats=()=>{
+  const days30=Array.from({length:30},(_,i)=>{const d=new Date(Date.now()-i*86400000);return d.toISOString().slice(0,10);}).reverse();
+  const rows=kinder.map(k=>{
+    const anw=anwesenheiten.filter(a=>a.kindId===k.id&&days30.includes(a.datum)&&a.status==="anwesend").length;
+    const abw=anwesenheiten.filter(a=>a.kindId===k.id&&days30.includes(a.datum)&&a.status==="abwesend").length;
+    const soll=Math.round((k.tage?.length||0)*4.3);
+    const pct=soll>0?Math.round((anw/soll)*100):null;
+    const col=pct===null?"#64748b":pct>=90?"#16a34a":pct>=70?"#d97706":"#dc2626";
+    return `<tr><td>${esc(k.name)}</td><td style="color:#16a34a;font-weight:600">${anw}</td><td style="color:#dc2626;font-weight:600">${abw}</td><td>${soll}</td>
+      <td style="color:${col};font-weight:700">${pct!==null?pct+"%":"–"}</td>
+      <td>${esc(k.eltern||"–")}</td></tr>`;
+  }).join("");
+  const total_anw=anwesenheiten.filter(a=>days30.includes(a.datum)&&a.status==="anwesend").length;
+  const total_abw=anwesenheiten.filter(a=>days30.includes(a.datum)&&a.status==="abwesend").length;
+  const parts=[
+    "<!DOCTYPE html><html lang='de'><head><meta charset='UTF-8'><title>Anwesenheitsstatistik<\/title>",
+    "<style>@page{size:A4;margin:15mm}*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:11pt}",
+    ".hdr{display:flex;justify-content:space-between;padding-bottom:5mm;border-bottom:2pt solid #2563EB;margin-bottom:6mm}",
+    ".logo{font-size:15pt;font-weight:900;color:#2563EB}",
+    "table{width:100%;border-collapse:collapse;margin-top:4mm}th{background:#f8fafc;padding:6px 10px;font-size:9pt;text-transform:uppercase;color:#64748b;text-align:left;border-bottom:1.5pt solid #e2e8f0}",
+    "td{padding:7px 10px;border-bottom:1pt solid #f1f5f9;font-size:10.5pt}",
+    ".footer{margin-top:8mm;font-size:8pt;color:#94a3b8;border-top:1pt solid #e2e8f0;padding-top:3mm}",
+    "<\/style><\/head><body>",
+    "<div class='hdr'><div><div class='logo'>🏡 "+esc(KITA.name)+"<\/div><div style='font-size:9pt;color:#64748b'>Anwesenheitsstatistik — letzte 30 Tage<\/div><\/div>",
+    "<div style='font-size:9pt;color:#64748b;text-align:right'>"+new Date().toLocaleDateString("de-CH")+"<br>"+days30[0]+" bis "+days30[29]+"<\/div><\/div>",
+    "<div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:8mm;margin-bottom:6mm'>",
+    "<div><div style='font-size:9pt;color:#64748b'>Kinder total<\/div><div style='font-size:20pt;font-weight:900;color:#2563EB'>"+kinder.length+"<\/div><\/div>",
+    "<div><div style='font-size:9pt;color:#64748b'>Anwesenheiten<\/div><div style='font-size:20pt;font-weight:900;color:#16a34a'>"+total_anw+"<\/div><\/div>",
+    "<div><div style='font-size:9pt;color:#64748b'>Abwesenheiten<\/div><div style='font-size:20pt;font-weight:900;color:#dc2626'>"+total_abw+"<\/div><\/div><\/div>",
+    "<table><thead><tr><th>Kind<\/th><th>Anwesend<\/th><th>Abwesend<\/th><th>Soll-Tage<\/th><th>Quote<\/th><th>Elternteil<\/th><\/tr><\/thead><tbody>"+rows+"<\/tbody><\/table>",
+    "<div class='footer'>"+esc(KITA.name)+" &bull; Anwesenheitsstatistik &bull; "+new Date().toLocaleDateString("de-CH")+"<\/div><\/body><\/html>"
+  ];
+  const w=window.open("","_blank"); w.document.write(parts.join("\n")); w.document.close();
+  setTimeout(()=>{try{w.print();}catch(e){}},600);
+};
+
 // ── SHOW/HIDE ─────────────────────────────────────────────
 
 function showLogin(){$("loginScreen").style.display="flex";$("appScreen").style.display="none";}
@@ -2598,6 +2948,22 @@ td .cell-sub { margin-top: 0; }
 .btn-save:hover { background: #6B50EF; box-shadow: 0 4px 12px rgba(123,97,255,.35); }
 .btn-cancel { padding: 10px 16px; background: none; color: var(--muted); border: 1.5px solid var(--border-2); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; cursor: pointer; transition: all .12s; }
 .btn-cancel:hover { background: var(--bg); color: var(--text-2); }
+
+/* ── DASHBOARD ──────────────────────────────────────────── */
+.dash-kpi         { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow-xs);transition:box-shadow .15s,transform .15s; }
+.dash-kpi:hover   { box-shadow:var(--shadow-sm);transform:translateY(-1px); }
+.dash-kpi-icon    { font-size:18px;margin-bottom:8px; }
+.dash-kpi-val     { font-size:26px;font-weight:800;line-height:1;letter-spacing:-.6px;color:var(--text); }
+.dash-kpi-val.primary { color:var(--primary); }
+.dash-kpi-val.green   { color:var(--green); }
+.dash-kpi-val.amber   { color:var(--amber); }
+.dash-kpi-val.red     { color:var(--red); }
+.dash-kpi-lbl     { font-size:12px;color:var(--muted);margin-top:4px;font-weight:500; }
+.dash-kpi-sub     { font-size:11px;color:var(--muted);margin-top:2px; }
+.dash-info-row    { display:flex;align-items:flex-start;gap:10px;padding:4px 0; }
+.dash-info-icon   { font-size:18px;flex-shrink:0;margin-top:1px; }
+.dash-quick-btn   { display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border:1.5px solid var(--border-2);border-radius:var(--radius-sm);background:var(--surface);cursor:pointer;font-family:inherit;transition:all .12s;text-align:left; }
+.dash-quick-btn:hover { border-color:var(--primary);background:var(--primary-light);color:var(--primary); }
 
 /* ── RESPONSIVE ─────────────────────────────────────────── */
 .checked-row td { opacity: .5; }
