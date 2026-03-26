@@ -3738,6 +3738,122 @@ textarea { resize: vertical; min-height: 70px; }
 
   /* ── LOGIN EXTRA ───────────────────────────────────────── */
   #loginScreen { display:flex;align-items:center;justify-content:center;min-height:100vh; }
+
+  /* ── BEOBACHTUNGEN / ENTWICKLUNG ─────────────────────── */
+  .beob-kind-card  { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-xs); }
+  .beob-bereich    { display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border); }
+  .beob-bereich:last-child { border-bottom:none; }
+  .beob-icon       { font-size:18px;width:24px;text-align:center; }
+  .beob-score      { font-size:12px;font-weight:700;color:var(--primary);margin-left:auto; }
+  .beob-bar-wrap   { flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden; }
+  .beob-bar-fill   { height:100%;border-radius:3px;background:var(--primary);transition:width .3s; }
+  .beob-radar      { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px; }
+  .stufe-stars     { display:flex;gap:2px; }
+  .star-btn        { font-size:16px;cursor:pointer;transition:transform .1s; }
+  .star-btn.active { transform:scale(1.1); }
+
+  /* ── KOMMUNIKATION ────────────────────────────────────── */
+  .komm-row    { display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);transition:background .1s; }
+  .komm-row:hover { background:var(--bg); }
+  .komm-row:last-child { border-bottom:none; }
+  .komm-date   { font-size:11px;color:var(--muted);white-space:nowrap; }
+
+  /* ── ESSENSPLAN ───────────────────────────────────────── */
+  .essen-header  { display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg);border-bottom:1px solid var(--border); }
+  .essen-col     { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden; }
+  .essen-col.today { border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-light); }
+  .essen-meal    { padding:10px 12px;border-bottom:1px solid var(--border); }
+  .essen-snack   { padding:8px 12px;background:var(--bg); }
+  .essen-add     { padding:8px 12px;text-align:center;cursor:pointer;color:var(--muted);font-size:12px; }
+  .essen-add:hover { color:var(--primary); }
+  .meal-icon     { font-size:16px;margin-right:4px; }
+  .meal-tag      { display:inline-block;background:var(--primary-light);color:var(--primary);font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;margin-top:4px; }
+
+  /* ── DIENSTPLAN / WOCHE ───────────────────────────────── */
+  .week-hdr      { padding:8px 10px;background:var(--primary-light);font-size:11px;font-weight:700;color:var(--primary);border-radius:var(--radius-sm) var(--radius-sm) 0 0; }
+  .week-col      { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden; }
+  .week-col.today{ border-color:var(--primary); }
+  .week-entry    { padding:6px 8px;margin:4px;background:var(--primary-light);border-radius:4px;font-size:11px; }
+  .week-empty    { padding:12px 8px;text-align:center;color:var(--muted);font-size:11px; }
+
+  /* ── TAGESSTRUKTUR ────────────────────────────────────── */
+  .tages-col-hdr        { padding:8px 10px;background:var(--primary-light);font-size:11px;font-weight:700;color:var(--primary); }
+  .tages-eintrag        { padding:7px 10px;border-bottom:1px solid var(--border);font-size:12px; }
+  .tages-slot-header    { display:flex;align-items:center;justify-content:space-between;margin-bottom:4px; }
+  .tages-slot-label     { font-size:11px;font-weight:600;color:var(--text); }
+  .tages-slot-meta      { font-size:10px;color:var(--muted); }
+  .tages-slot-label-inp { width:100%;font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;outline:none; }
+  .tages-slot-val-inp   { width:100%;font-family:inherit;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:2px 5px;outline:none;margin-top:3px; }
+  .tages-slot-zeit-inp  { width:60px;font-family:inherit;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:2px 5px;outline:none; }
+  .tages-add-btn        { display:block;width:100%;padding:6px;background:none;border:1px dashed var(--border-2);border-radius:4px;cursor:pointer;font-size:11px;color:var(--muted);transition:all .1s; }
+  .tages-add-btn:hover  { border-color:var(--primary);color:var(--primary); }
+  .tages-remove-btn     { background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 4px;border-radius:3px; }
+  .tages-remove-btn:hover{ color:var(--red); }
+  .tages-slot           { padding:8px 10px;border-bottom:1px solid var(--border); }
+  .tages-slot.filled    { background:var(--primary-light); }
+
+  /* ── KALENDER ─────────────────────────────────────────── */
+  .kal-hdr  { display:flex;align-items:center;justify-content:space-between;margin-bottom:12px; }
+  .kal-day  { font-size:11px;font-weight:600;text-align:center;padding:4px 0;color:var(--muted); }
+  .kal-dots { display:flex;flex-wrap:wrap;gap:2px;margin-top:2px; }
+  .kal-dot  { width:5px;height:5px;border-radius:50%;background:var(--primary);flex-shrink:0; }
+  .kal-cell.today { border-color:var(--primary);background:var(--primary-light);font-weight:700;color:var(--primary); }
+
+  /* ── EINGEWÖHNUNG ─────────────────────────────────────── */
+  .ew-header       { display:flex;align-items:center;justify-content:space-between;margin-bottom:12px; }
+  .ew-progress-bar { height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin:8px 0; }
+  .ew-progress-fill{ height:100%;border-radius:3px;background:linear-gradient(90deg,var(--primary),var(--pink));transition:width .4s; }
+  .ew-phase-dot    { width:10px;height:10px;border-radius:50%;background:var(--border);border:2px solid var(--border-2); }
+  .ew-phase-dot.done   { background:var(--green);border-color:var(--green); }
+  .ew-phase-dot.active { background:var(--primary);border-color:var(--primary); }
+  .ew-phase-label  { font-size:10px;color:var(--muted);text-align:center;margin-top:2px; }
+  .ew-notes        { margin-top:12px; }
+  .ew-note-item    { display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px; }
+  .ew-note-item:last-child { border-bottom:none; }
+  .ew-actions      { display:flex;gap:6px;margin-top:12px;flex-wrap:wrap; }
+
+  /* ── STATS / SC-SUB ──────────────────────────────────── */
+  .sc-sub  { font-size:11px;color:var(--muted);margin-top:2px; }
+  .stat-val{ font-size:18px;font-weight:700;color:var(--text); }
+
+  /* ── BARS / CHARTS ────────────────────────────────────── */
+  .bar-col { display:flex;flex-direction:column;align-items:center;gap:4px;flex:1; }
+  .bar-tip { font-size:10px;color:var(--muted);font-weight:600; }
+  .bar-lbl { font-size:10px;color:var(--muted); }
+  .chart-bars{ display:flex;align-items:flex-end;gap:8px;height:80px;padding:0 8px; }
+
+  /* ── ALLERGIE ─────────────────────────────────────────── */
+  .allergie-row  { display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border); }
+  .allergie-row:last-child { border-bottom:none; }
+  .allergie-badge{ display:inline-block;background:var(--red-light);color:var(--red);font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px; }
+
+  /* ── INFO CARDS ───────────────────────────────────────── */
+  .info-card       { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-xs); }
+  .info-card-header{ padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border);font-weight:700;font-size:13px; }
+  .info-card-body  { padding:14px 16px; }
+  .info-row        { display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px; }
+  .info-row:last-child { border-bottom:none; }
+  .info-section        { margin-bottom:16px; }
+  .info-section-title  { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px; }
+
+  /* ── NAV EXTRA ────────────────────────────────────────── */
+  .nav-group-icon  { font-size:14px;width:18px;text-align:center;flex-shrink:0; }
+  .nav-group-label { flex:1;text-align:left; }
+
+  /* ── TAG BUTTONS ──────────────────────────────────────── */
+  .tage-row { display:flex;gap:3px;flex-wrap:wrap; }
+  .tage-pip { display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-size:10px;font-weight:700;background:var(--bg);color:var(--muted);border:1.5px solid var(--border-2);cursor:pointer;transition:all .1s; }
+  .tage-pip.on { background:var(--primary-light);color:var(--primary);border-color:var(--primary); }
+  .tag-btn  { padding:3px 10px;border-radius:20px;border:1.5px solid var(--border-2);background:none;cursor:pointer;font-family:inherit;font-size:11px;font-weight:600;color:var(--muted);transition:all .1s; }
+  .tag-btn.on { background:var(--primary-light);color:var(--primary);border-color:var(--primary-mid); }
+
+  /* ── WARTELISTE KARTE ──────────────────────────────────── */
+  .warte-card { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;box-shadow:var(--shadow-xs); }
+
+  /* ── LAYOUT HELPERS ────────────────────────────────────── */
+  .flex-1   { flex:1; }
+  .ml-auto  { margin-left:auto; }
+  .ki-locked{ background:var(--bg);border:1px dashed var(--border-2);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;margin:8px 0; }
 </style>
 </head>
 <body>
