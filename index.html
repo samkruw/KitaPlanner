@@ -333,7 +333,15 @@ function renderTopbar() {
 // ── BELEGUNGSLISTE ────────────────────────────────────────
 // ── SUB-TAB STATE ─────────────────────────────────────────
 let _subTab = {};
-window._setSubTab = (group, tab) => { _subTab[group]=tab; renderAll(); };
+window._setSubTab = (group, tab) => {
+  _subTab[group]=tab;
+  const c=$('tabContent');
+  const renderMap={dashboard:renderDashboard,belegung:renderBelegung,anwesenheit:renderAnwesenheit,anwesenheitStats:renderAnwesenheitStats,rechnungen:renderRechnungen,kommunikation:renderKommunikation,dienstplan:renderDienstplan,mitarbeiter:renderMitarbeiter,warteliste:renderWarteliste,ferien:renderFerien,dokumente:renderDokumente,forecast:renderForecast,subv:renderSubv,rechner:renderRechner,mahnwesen:renderMahnwesen,jahresabschluss:renderJahresabschluss,essensplan:renderEssensplan,notfallkontakte:renderNotfallkontakte,eingewoehnung:renderEingewoehnung,vertraege:renderVertraege,beobachtungen:renderBeobachtungen,tagesstruktur:renderTagesstruktur,ki:renderKiAssistent,export:renderExport,medikamente:renderMedikamente,checkliste:renderCheckliste,einkaufsliste:renderEinkaufsliste,unfallprotokoll:renderUnfallprotokoll,kesb:renderKesb};
+  if(c&&renderMap[activeTab]) c.innerHTML=renderMap[activeTab]();
+};
+  if(c && map[activeTab]) c.innerHTML = map[activeTab]();
+  renderSidebar();
+};
 function subTabs(group, tabs, activeDefault) {
   const cur = _subTab[group] || activeDefault || tabs[0].id;
   return '<div class="sub-tabs">'
@@ -2583,10 +2591,7 @@ async function loadGroqKey() {
     const snap = await getDoc(doc(db,"kunden",currentUser.uid,"settings","ai"));
     if(snap.exists()){
       Object.assign(_aiSettings, snap.data());
-      // Update input directly if visible — don't renderAll() which would reset mid-type
-      if($("aiKeyInput") && document.activeElement !== $("aiKeyInput")){
-        $("aiKeyInput").value = _aiSettings.key||"";
-      }
+      if(activeTab==='ki'){ renderAll(); } else if($("aiKeyInput")){$("aiKeyInput").value = _aiSettings.key||"";}
       return;
     }
     // Migrate old groq key
@@ -2611,13 +2616,13 @@ window._updateAiProvider = (v) => {
 };
 window._updateAiModel = (v) => { _aiSettings.model=v; saveAiSettings(); };
 window._updateAiKey   = (v) => { _aiSettings.key=v; saveAiSettingsDebounced(); };
-window._saveAiKeyNow  = async (v) => {
-  if(!v) return;
-  _aiSettings.key = v;
+window._saveAiKeyNow = async (v) => {
+  const key=(v||'').trim();
+  if(!key){ toast('Bitte API Key eingeben','error'); return; }
+  _aiSettings.key=key;
   await saveAiSettings();
-  // Show saved hint
-  const hint = $("aiKeySavedHint");
-  if(hint){ hint.style.display="inline"; setTimeout(()=>{ hint.style.display="none"; },2000); }
+  toast('API Key gespeichert ✅','success');
+  if(activeTab==='ki') renderAll();
 };
 
 async function aiCall(systemPrompt, userPrompt, onChunk) {
