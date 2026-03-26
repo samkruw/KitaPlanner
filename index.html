@@ -15,7 +15,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot }
+import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -2776,27 +2776,50 @@ function toast(msg,type="success"){
 
 function renderKiAssistent(){
   const key=getAiKey(), saved=!!key;
-  return "<div style=\"max-width:600px\">"
-    +"<div class=\"table-title\" style=\"font-size:18px;margin-bottom:6px\">⚙️ KI-Einstellungen</div>"
-    +"<div class=\"cell-sub\" style=\"margin-bottom:20px\">API Key einmalig speichern — KI-Buttons erscheinen direkt in den Modulen</div>"
-    +"<div class=\"table-card\" style=\"padding:22px;margin-bottom:14px\">"
-    +"<div class=\"table-title\" style=\"margin-bottom:12px\">🔑 API Key</div>"
-    +"<div style=\"display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center\">"
-    +"<input id=\"aiKeyInput\" type=\"password\" class=\"field-input\" placeholder=\""+getAiProvider().keyLabel+"\" value=\""+key+"\" onkeydown=\"if(event.key===&quot;Enter&quot;)_saveAiKeyNow(this.value)\"/>"
-    +"<button class=\"btn-primary\" onclick=\"_saveAiKeyNow($('aiKeyInput').value)\">💾 Speichern</button>"
-    +"<a href=\""+getAiProvider().keyUrl+"\" target=\"_blank\" class=\"btn-secondary\">Key holen →</a></div>"
-    +"<span id=\"aiKeySavedHint\" style=\"font-size:11px;color:var(--green);display:none;margin-top:6px\">✅ Gespeichert</span>"
-    +(saved?"<div style=\"margin-top:10px;font-size:12px;color:var(--green)\">✅ API Key aktiv</div>":"<div style=\"margin-top:10px;font-size:12px;color:var(--amber)\">⚠️ Kein Key</div>")
-    +"</div>"
-    +"<div class=\"table-card\" style=\"padding:22px;margin-bottom:14px\">"
-    +"<div class=\"table-title\" style=\"margin-bottom:12px\">🚀 Direktstart</div>"
-    +"<div style=\"display:flex;gap:10px;flex-wrap:wrap\">"
-    +"<button class=\"btn-primary\" onclick=\"_kiKonzept()\">📖 Päd. Konzept</button>"
-    +"<button class=\"btn-secondary\" onclick=\"_kiElternumfrage()\">📋 Elternumfrage</button>"
-    +"<button class=\"btn-secondary\" onclick=\"_kiQualitaetsbericht()\">📊 Qualitätsbericht</button>"
-    +"<button class=\"btn-secondary\" onclick=\"_setTab('export')\">⬇️ Export</button>"
-    +"</div></div></div>";
+  const prov=getAiProvider();
+  return `<div style="max-width:620px">
+  <div class="table-title" style="font-size:18px;margin-bottom:6px">⚙️ KI-Einstellungen</div>
+  <div class="cell-sub" style="margin-bottom:20px">Groq API Key (kostenlos) einmalig speichern — KI erscheint dann direkt in allen Modulen</div>
+  <div class="table-card" style="padding:22px;margin-bottom:14px">
+    <div class="table-title" style="margin-bottom:12px">🔑 API Key</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="aiKeyInput" type="password" class="field-input" style="flex:1;min-width:200px"
+        placeholder="${prov.keyLabel}" value="${key}"
+        onkeydown="if(event.key==='Enter')_saveAiKeyNow(document.getElementById('aiKeyInput').value)"/>
+      <button class="btn-primary" onclick="_saveAiKeyNow(document.getElementById('aiKeyInput').value)">💾 Speichern</button>
+      <a href="${prov.keyUrl}" target="_blank" class="btn-secondary" style="text-decoration:none">🔗 Key holen</a>
+    </div>
+    <div id="aiKeySavedHint" style="font-size:12px;color:var(--green);display:none;margin-top:8px;font-weight:600">✅ Gespeichert!</div>
+    <div style="margin-top:10px;font-size:12px;${saved?'color:var(--green)':'color:var(--amber)'}">
+      ${saved?'✅ API Key aktiv · Modell: '+getAiModel():'⚠️ Noch kein Key gespeichert'}
+    </div>
+  </div>
+  <div class="table-card" style="padding:22px;margin-bottom:14px">
+    <div class="table-title" style="margin-bottom:12px">🤖 Modell wählen</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field"><label>Anbieter</label>
+        <select class="field-input" onchange="_updateAiProvider(this.value)">
+          ${Object.entries(AI_PROVIDERS).map(([k,p])=>'<option value="'+k+'"'+(k===_aiSettings.provider?' selected':'')+'>'+p.name+'</option>').join('')}
+        </select>
+      </div>
+      <div class="field"><label>Modell</label>
+        <select id="aiModelSel" class="field-input" onchange="_updateAiModel(this.value)">
+          ${prov.models.map(m=>'<option value="'+m+'"'+(m===_aiSettings.model?' selected':'')+'>'+m+'</option>').join('')}
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="table-card" style="padding:22px">
+    <div class="table-title" style="margin-bottom:12px">🚀 KI-Tools direkt starten</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-primary" onclick="_kiKonzept()">📖 Päd. Konzept</button>
+      <button class="btn-secondary" onclick="_kiQualitaetsbericht()">📊 Qualitätsbericht</button>
+      <button class="btn-secondary" onclick="_kiElternumfrage()">📋 Elternumfrage</button>
+      <button class="btn-secondary" onclick="_setTab('export')">⬇️ Export & Backup</button>
+    </div>
+  </div></div>`;
 }
+
 
 // ── EXPORT ─────────────────────────────────────────────────
 function renderExport(){
