@@ -203,11 +203,7 @@ const KITA_COLORS = {
 
 // ── TABS ──────────────────────────────────────────────────
 let activeTab = "dashboard";
-window._setTab = t => { 
-  console.log('[KitaPlaner] setTab:', t); 
-  activeTab=t; 
-  renderAll(); 
-};
+window._setTab = t => { activeTab=t; renderAll(); };
 window.closeModal = id => { const m=$(id); if(m)m.style.display="none"; };
 
 // ── RENDER ENGINE ─────────────────────────────────────────
@@ -2698,6 +2694,20 @@ function kiPanelBrief() {
     +'<div id="kiBAct"></div></div>'
     +'<div id="kiBOut" class="ki-inline-out"></div></div>';
 }
+
+function kiPanelSimple(id, title, btnLabel, onclickFn) {
+  if(!getAiKey()) return '<div class="ki-inline-locked">⚡ <button class="btn-xs slate" onclick="_setTab(&quot;ki&quot;)">API Key einrichten</button> für KI-Funktionen</div>';
+  return '<div class="ki-inline-panel">'
+    +'<div class="ki-inline-title">⚡ '+title+'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<button class="ki-btn-sm" onclick="'+onclickFn+'">✨ '+btnLabel+'</button>'
+    +'<span id="'+id+'Spin" style="display:none;color:var(--primary);font-size:11px;font-weight:600">⚡ Generiere…</span>'
+    +'</div>'
+    +'<div id="'+id+'Out" class="ki-inline-out"></div>'
+    +'</div>';
+}
+
+
 
 function kiPanelEssen() {
   if(!getAiKey()) return '<div class="ki-inline-locked">⚡ <button class="btn-xs slate" onclick="_setTab(&quot;ki&quot;)">API Key einrichten</button> um KI-Menüpläne zu generieren</div>';
