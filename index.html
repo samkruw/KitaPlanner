@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet"/>
 <script type="module">
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -3069,6 +3070,678 @@ window._kiDruckText=id=>{ const text=$(id)?.querySelector(".ki-inline-out-text")
 function showLogin(){ $("loginScreen").style.display="flex"; $("appScreen").style.display="none"; }
 function showApp(){ $("loginScreen").style.display="none"; $("appScreen").style.display="block"; $("userEmail").textContent=currentUser.email; loadGroqKey(); }
 
+</script>
+<style>
+  :root {
+    --primary: #1A56C4;
+    --primary-light: #EBF0FB;
+    --green: #16A34A;
+    --green-light: #DCFCE7;
+    --amber: #D97706;
+    --amber-light: #FEF3C7;
+    --red: #DC2626;
+    --red-light: #FEE2E2;
+    --text: #111827;
+    --muted: #6B7280;
+    --border: #E2E6EC;
+    --bg: #F4F6FA;
+    --surface: #FFFFFF;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── LOGIN ── */
+  #loginScreen {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1A56C4 0%, #0F3585 100%);
+  }
+  .login-box {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 40px 36px;
+    width: 100%; max-width: 380px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.2);
+  }
+  .login-logo { font-size: 32px; margin-bottom: 4px; }
+  .login-title { font-family: 'Sora', sans-serif; font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+  .login-sub { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .5px; }
+  .form-group input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; transition: border-color .15s; }
+  .form-group input:focus { border-color: var(--primary); }
+  .login-btn { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-family: 'Sora', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 6px; transition: opacity .15s; }
+  .login-btn:hover { opacity: .9; }
+  #loginErr { color: var(--red); font-size: 12px; margin-top: 8px; min-height: 16px; }
+
+  /* ── APP SHELL — SIDEBAR LAYOUT ── */
+  #appScreen { display: none; }
+
+  .app-layout {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 240px;
+    min-width: 240px;
+    background: #0F2554;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+    overflow-y: auto;
+  }
+
+  .sidebar-logo {
+    padding: 22px 20px 18px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .sidebar-logo-row { display: flex; align-items: center; gap: 10px; }
+  .sidebar-logo-icon { font-size: 26px; }
+  .sidebar-logo-text { font-family: 'Sora', sans-serif; color: white; font-weight: 800; font-size: 17px; line-height: 1.1; }
+  .sidebar-logo-sub  { color: rgba(255,255,255,.4); font-size: 10px; letter-spacing: .5px; text-transform: uppercase; margin-top: 2px; }
+
+  .sidebar-section { padding: 16px 12px 4px; }
+  .sidebar-section-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: rgba(255,255,255,.3);
+    padding: 0 8px; margin-bottom: 4px;
+  }
+
+  .nav-btn {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 9px 12px;
+    background: none; border: none; border-radius: 8px;
+    color: rgba(255,255,255,.6); font-size: 13px; font-weight: 600;
+    cursor: pointer; text-align: left;
+    transition: all .15s;
+    margin-bottom: 2px;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,.08); color: rgba(255,255,255,.9); }
+  .nav-btn.active { background: rgba(255,255,255,.12); color: white; }
+  .nav-btn.active .nav-icon { opacity: 1; }
+  .nav-icon { font-size: 15px; opacity: .7; width: 20px; text-align: center; }
+  .nav-badge { margin-left: auto; background: var(--red); color: white; border-radius: 10px; font-size: 10px; font-weight: 800; padding: 1px 6px; }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 16px 12px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .sidebar-user { color: rgba(255,255,255,.5); font-size: 11px; margin-bottom: 8px; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar-logout {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; padding: 9px 12px;
+    background: rgba(255,255,255,.07); border: none; border-radius: 8px;
+    color: rgba(255,255,255,.6); font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all .15s;
+  }
+  .sidebar-logout:hover { background: rgba(255,255,255,.12); color: white; }
+
+  /* ── MAIN AREA ── */
+  .main-area {
+    margin-left: 240px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    position: sticky; top: 0; z-index: 50;
+  }
+  .topbar-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 17px; font-weight: 800; color: var(--text);
+    flex: 1;
+  }
+  .topbar-stats { display: flex; gap: 20px; }
+  .ts-item { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .ts-label { color: var(--muted); }
+  .ts-val   { font-weight: 800; }
+
+  main { padding: 24px 28px 60px; }
+  .page-title { font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 800; margin-bottom: 18px; display: none; }
+
+  /* card */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; }
+  .card-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .card-sub { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+
+  /* toolbar */
+  .toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+  .search-input { flex: 1; min-width: 200px; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; }
+  .search-input:focus { border-color: var(--primary); }
+  .btn-primary { background: var(--primary); color: white; border: none; border-radius: 8px; padding: 9px 16px; font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .btn-primary:hover { opacity: .9; }
+
+  /* table */
+  .table-wrap { overflow-x: auto; padding: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead tr { background: var(--bg); border-bottom: 1px solid var(--border); }
+  th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .5px; white-space: nowrap; }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr.even { background: white; }
+  tr.odd  { background: #FAFBFC; }
+  tr:last-child td { border-bottom: none; }
+
+  .kind-name { font-weight: 700; }
+  .kind-sub  { font-size: 11px; color: var(--muted); }
+  .muted     { color: var(--muted); }
+  .fw6       { font-weight: 600; }
+  .fw7       { font-weight: 700; }
+  .fs11      { font-size: 11px; }
+  .fs12      { font-size: 12px; }
+  .green     { color: var(--green); }
+  .amber     { color: var(--amber); }
+  .red       { color: var(--red); }
+
+  .tage-row  { display: flex; gap: 3px; flex-wrap: wrap; }
+  .tage-chip { font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 3px; background: var(--bg); color: var(--border); }
+  .tage-chip.active { background: var(--primary-light); color: var(--primary); }
+
+  .badge { border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; letter-spacing: .3px; }
+  .badge.green  { background: var(--green-light); color: #166534; }
+  .badge.amber  { background: var(--amber-light); color: #92400e; }
+  .badge.grey   { background: var(--bg); color: var(--muted); }
+  .badge.red    { background: var(--red-light); color: var(--red); }
+  .badge.primary{ background: var(--primary-light); color: var(--primary); }
+
+  .action-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .btn-icon   { background: none; border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
+  .btn-icon.danger { border-color: var(--red-light); color: var(--red); }
+  .btn-sm     { border: none; border-radius: 6px; padding: 5px 10px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .btn-sm.danger      { background: var(--red-light); color: var(--red); }
+  .btn-sm.success     { background: var(--green-light); color: var(--green); }
+  .btn-sm.primary-btn { background: var(--primary-light); color: var(--primary); }
+  .btn-secondary { background: var(--surface); color: var(--primary); border: 1.5px solid var(--primary); border-radius: 8px; padding: 9px 14px; font-weight: 700; font-size: 13px; cursor: pointer; }
+
+  .tally { font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .empty { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
+
+  /* chart */
+  .chart-wrap { overflow-x: auto; padding-bottom: 4px; }
+  .chart-bars { display: flex; align-items: flex-end; gap: 5px; min-width: 860px; height: 130px; padding: 0 4px 24px; }
+  .bar-col    { flex: 1; display: flex; flex-direction: column; align-items: center; }
+  .bar        { width: 100%; border-radius: 3px 3px 0 0; transition: opacity .15s; }
+  .bar:hover  { opacity: .8; }
+  .bar-tip    { font-size: 9px; color: var(--muted); margin-bottom: 2px; }
+  .bar-label  { font-size: 9px; color: var(--muted); transform: rotate(-40deg); transform-origin: top left; white-space: nowrap; margin-top: 6px; margin-left: 6px; }
+  .legend-row { display: flex; gap: 16px; margin-top: 12px; }
+  .legend-item{ display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .dot        { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .green-bg   { background: var(--green); }
+  .amber-bg   { background: var(--amber); }
+
+  /* progress */
+  .prog-row  { display: flex; align-items: center; gap: 8px; }
+  .prog-bg   { flex: 1; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; min-width: 60px; }
+  .prog-fill { height: 100%; border-radius: 3px; }
+
+  /* stats grid */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px; }
+  .stat-card  { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .sc-icon    { font-size: 18px; margin-bottom: 8px; }
+  .sc-val     { font-family: 'Sora', sans-serif; font-size: 24px; font-weight: 800; line-height: 1; }
+  .sc-val.primary { color: var(--primary); }
+  .sc-val.green   { color: var(--green); }
+  .sc-val.amber   { color: var(--amber); }
+  .sc-lbl     { font-size: 12px; color: var(--muted); margin-top: 5px; }
+  .sc-sub     { font-size: 11px; color: var(--border); margin-top: 2px; }
+
+  /* donut */
+  .donut-row    { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+  .donut-legend { display: flex; flex-direction: column; gap: 12px; }
+  .dl-item      { display: flex; align-items: center; gap: 10px; }
+  .dl-item .dot { flex-shrink: 0; }
+
+  /* mitarbeiter cards */
+  .ma-card    { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; display: flex; gap: 16px; align-items: flex-start; }
+  .ma-avatar  { width: 44px; height: 44px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-family: 'Sora',sans-serif; font-weight: 800; font-size: 15px; flex-shrink: 0; }
+  .ma-info    { flex: 1; }
+  .ma-name    { font-family: 'Sora',sans-serif; font-weight: 700; font-size: 15px; }
+  .ma-rolle   { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .ma-meta    { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .ma-stats   { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px,1fr)); gap: 10px; background: var(--bg); border-radius: 8px; padding: 10px 12px; }
+  .ma-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* week grid */
+  .week-grid  { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin-top: 12px; }
+  .week-col   { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .week-col.today { border-color: var(--primary); }
+  .week-header{ background: var(--bg); padding: 8px 10px; font-weight: 700; font-size: 12px; text-align: center; border-bottom: 1px solid var(--border); }
+  .week-col.today .week-header { background: var(--primary-light); color: var(--primary); }
+  .week-entry { padding: 8px 10px; border-bottom: 1px solid var(--border); background: white; }
+  .week-empty { padding: 12px 10px; color: var(--border); font-size: 12px; text-align: center; }
+
+  textarea.field-textarea { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 13px; outline: none; resize: vertical; min-height: 80px; font-family: inherit; }
+  textarea.field-textarea:focus { border-color: var(--primary); }
+
+  /* modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.45); z-index: 200;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--surface); border-radius: 14px;
+    padding: 28px 28px 24px; width: 100%; max-width: 520px;
+    box-shadow: 0 24px 64px rgba(0,0,0,.18);
+    max-height: 90vh; overflow-y: auto;
+  }
+  .modal-title { font-family: 'Sora', sans-serif; font-size: 17px; font-weight: 800; color: var(--primary); margin-bottom: 18px; }
+  .modal-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal-grid .full { grid-column: 1/-1; }
+  .field label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 4px; }
+  .field input, .field select { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 13px; outline: none; font-family: inherit; }
+  .field input:focus, .field select:focus { border-color: var(--primary); }
+  .modal-tage { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+  .tag-btn    { padding: 4px 10px; border: 1.5px solid var(--border); border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; background: var(--bg); color: var(--muted); }
+  .tag-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-check { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; cursor: pointer; }
+  .modal-footer { display: flex; gap: 10px; margin-top: 20px; }
+  .btn-save   { flex: 1; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 8px; font-family: 'Sora', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer; }
+  .btn-cancel { padding: 10px 18px; background: none; color: var(--muted); border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; }
+
+
+  /* ── KALENDER ── */
+  .kal-grid  { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+  .kal-hdr   { text-align:center; font-size:10px; font-weight:700; color:var(--muted); padding:4px 0; text-transform:uppercase; letter-spacing:.5px; }
+  .kal-cell  { min-height:52px; border:1px solid var(--border); border-radius:5px; padding:4px 5px; cursor:pointer; transition:background .1s; background:var(--surface); }
+  .kal-cell:hover { background:var(--primary-light); }
+  .kal-cell.today { border-color:var(--primary); background:var(--primary-light); }
+  .kal-cell.empty { background:var(--bg); border-color:transparent; cursor:default; }
+  .kal-day   { font-size:11px; font-weight:700; color:var(--text); margin-bottom:3px; }
+  .kal-cell.today .kal-day { color:var(--primary); }
+  .kal-dots  { display:flex; gap:2px; flex-wrap:wrap; }
+  .kal-dot   { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+  /* Kommunikation liste */
+  .komm-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); cursor:pointer; }
+  .komm-item:hover { background:var(--bg); margin:0 -4px; padding:10px 4px; border-radius:6px; }
+  .komm-item:last-child { border-bottom:none; }
+  .komm-date { font-size:10px; font-weight:700; color:var(--muted); min-width:40px; text-align:center; }
+  .komm-icon { font-size:18px; flex-shrink:0; }
+  .komm-body { flex:1; min-width:0; }
+  .mb-content-preview { margin-top:8px; font-size:12px; color:var(--muted); line-height:1.5; white-space:pre-wrap; max-height:60px; overflow:hidden; }
+  .mb-preview { transition:box-shadow .15s; }
+  .mb-preview:hover { box-shadow:0 4px 16px rgba(26,86,196,.12); }
+
+  @media (max-width: 768px) {
+    .sidebar { width: 200px; min-width: 200px; }
+    .main-area { margin-left: 200px; }
+  }
+  @media (max-width: 600px) {
+    .sidebar { display: none; }
+    .main-area { margin-left: 0; }
+    .modal-grid { grid-template-columns: 1fr; }
+    .modal-grid .full { grid-column: 1; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .week-grid  { grid-template-columns: repeat(5,minmax(80px,1fr)); overflow-x: auto; }
+    main { padding: 16px 14px 60px; }
+    .topbar { padding: 0 14px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ── -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">🏡</div>
+    <div class="login-title">KitaPlaner</div>
+    <div class="login-sub">Verwaltungssoftware für Schweizer Kitas</div>
+    <div class="form-group">
+      <label>E-Mail</label>
+      <input id="loginEmail" type="email" placeholder="name@kita.ch" autocomplete="username"/>
+    </div>
+    <div class="form-group">
+      <label>Passwort</label>
+      <input id="loginPw" type="password" placeholder="••••••••" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')_login()"/>
+    </div>
+    <button class="login-btn" onclick="_login()">Anmelden</button>
+    <div id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ── APP ── -->
+<div id="appScreen">
+<div class="app-layout">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-row">
+        <span class="sidebar-logo-icon">🏡</span>
+        <div>
+          <div class="sidebar-logo-text">KitaPlaner</div>
+          <div class="sidebar-logo-sub">Verwaltung · CH</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="sidebarNav"></div>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user" id="userEmail"></div>
+      <button class="sidebar-logout" onclick="_logout()">
+        <span>↩</span> Abmelden
+      </button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div class="main-area">
+    <div class="topbar">
+      <div class="topbar-title" id="topbarTitle">Belegung</div>
+      <div class="topbar-stats" id="statBar"></div>
+    </div>
+    <main>
+      <div id="tabContent"></div>
+    </main>
+  </div>
+
+</div>
+</div>
+
+<!-- ── MODAL: KIND ── -->
+<div class="modal-overlay" id="kindModal" onclick="if(event.target===this)closeModal('kindModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="kindModalTitle">Kind erfassen</div>
+    <div class="modal-grid">
+      <div class="field full">
+        <label>Name des Kindes</label>
+        <input id="kmName" type="text" placeholder="Vorname Nachname"/>
+      </div>
+      <div class="field">
+        <label>Geburtsdatum</label>
+        <input id="kmGeb" type="date"/>
+      </div>
+      <div class="field">
+        <label>Elternteil / Kontakt</label>
+        <input id="kmEltern" type="text" placeholder="Name Elternteil"/>
+      </div>
+      <div class="field">
+        <label>Eintritt</label>
+        <input id="kmEintritt" type="date"/>
+      </div>
+      <div class="field">
+        <label>Austritt</label>
+        <input id="kmAustritt" type="date"/>
+      </div>
+      <div class="field">
+        <label>Tarif</label>
+        <select id="kmTarif"></select>
+      </div>
+      <div class="field full">
+        <label>Anwesenheitstage</label>
+        <div class="modal-tage" id="kmTage"></div>
+      </div>
+      <div class="field full">
+        <label class="modal-check">
+          <input id="kmSubv" type="checkbox"/> Subventionierter Platz
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="kmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('kindModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: TARIF ── -->
+<div class="modal-overlay" id="tarifModal" onclick="if(event.target===this)closeModal('tarifModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="tarifModalTitle">Tarif erfassen</div>
+    <div class="modal-grid">
+      <div class="field">
+        <label>Kürzel (z.B. A)</label>
+        <input id="tmId" type="text" placeholder="A"/>
+      </div>
+      <div class="field">
+        <label>Bezeichnung</label>
+        <input id="tmName" type="text" placeholder="Basis"/>
+      </div>
+      <div class="field">
+        <label>Preis (CHF / Tag)</label>
+        <input id="tmPreis" type="number" placeholder="85"/>
+      </div>
+      <div class="field">
+        <label>Beschreibung</label>
+        <input id="tmBeschr" type="text" placeholder="2–3 Tage/Woche"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="tmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('tarifModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: RECHNUNG ── -->
+<div class="modal-overlay" id="rechModal" onclick="if(event.target===this)closeModal('rechModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="rechModalTitle">Neue Rechnung</div>
+    <div class="modal-grid">
+      <div class="field"><label>Rechnungs-Nr.</label><input id="rmNr" type="text" placeholder="2026-01-001"/></div>
+      <div class="field"><label>Kind</label><select id="rmKind"></select></div>
+      <div class="field"><label>Betrag (CHF)</label><input id="rmBetrag" type="number" placeholder="0.00" step="0.05"/></div>
+      <div class="field"><label>MWST (%)</label><input id="rmMwst" type="number" placeholder="8.1" step="0.1"/></div>
+      <div class="field"><label>Rechnungsdatum</label><input id="rmDatum" type="date"/></div>
+      <div class="field"><label>Fällig am</label><input id="rmFaellig" type="date"/></div>
+      <div class="field full"><label>Bemerkung</label><input id="rmBemerkung" type="text" placeholder="Betreuung Januar 2026"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="rmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('rechModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: NACHRICHT ── -->
+<div class="modal-overlay" id="nachrichtModal" onclick="if(event.target===this)closeModal('nachrichtModal')">
+  <div class="modal-box" style="max-width:560px">
+    <div class="modal-title" id="nachrichtModalTitle">Neuer Eintrag</div>
+    <div class="modal-grid">
+      <div class="field full"><label>Betreff / Titel</label><input id="nmBetreff" type="text" placeholder="z.B. Monatsbeitrag März 2026"/></div>
+      <div class="field"><label>Empfänger</label><select id="nmEmpfaenger"></select></div>
+      <div class="field"><label>Typ</label>
+        <select id="nmTyp">
+          <option value="monatsbeitrag">💰 Monatsbeitrag</option>
+          <option value="event">🎉 Event / Anlass</option>
+          <option value="termin">📅 Termin</option>
+          <option value="info">ℹ️ Info</option>
+          <option value="brief">📄 Elternbrief</option>
+          <option value="email">📧 E-Mail</option>
+        </select>
+      </div>
+      <div class="field"><label>Datum</label><input id="nmDatum" type="date"/></div>
+      <div id="nmBetragRow" style="display:contents">
+        <div class="field"><label>Betrag (CHF)</label><input id="nmBetrag" type="number" placeholder="0.00" step="0.05"/></div>
+        <div class="field"><label>Zahlbar bis</label><input id="nmFaellig" type="date"/></div>
+      </div>
+      <div class="field full"><label>Inhalt / Beschreibung</label><textarea id="nmInhalt" class="field-textarea" style="min-height:120px" placeholder="Liebe Eltern&#10;&#10;Schreiben Sie hier Ihren Text..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="nmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('nachrichtModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: DIENSTPLAN ── -->
+<div class="modal-overlay" id="dienstModal" onclick="if(event.target===this)closeModal('dienstModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="dienstModalTitle">Neuer Eintrag</div>
+    <div class="modal-grid">
+      <div class="field full"><label>Mitarbeiter/in</label><select id="dmMitarbeiter"></select></div>
+      <div class="field"><label>Datum</label><input id="dmDatum" type="date"/></div>
+      <div class="field"><label>Typ</label>
+        <select id="dmTyp">
+          <option value="betreuung">👶 Betreuung</option>
+          <option value="admin">🏢 Administration</option>
+        </select>
+      </div>
+      <div class="field"><label>Von</label><input id="dmVon" type="time"/></div>
+      <div class="field"><label>Bis</label><input id="dmBis" type="time"/></div>
+      <div class="field full"><label>Aufgabe / Bemerkung</label><input id="dmAufgabe" type="text" placeholder="z.B. Morgenbetreuung"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="dmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('dienstModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: WARTELISTE ── -->
+<div class="modal-overlay" id="warteModal" onclick="if(event.target===this)closeModal('warteModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="warteModalTitle">Auf Warteliste setzen</div>
+    <div class="modal-grid">
+      <div class="field full"><label>Name des Kindes</label><input id="wmName" type="text" placeholder="Vorname Nachname"/></div>
+      <div class="field"><label>Geburtsdatum</label><input id="wmGeb" type="date"/></div>
+      <div class="field"><label>Elternteil / Kontakt</label><input id="wmEltern" type="text" placeholder="Name Elternteil"/></div>
+      <div class="field"><label>Anmeldedatum</label><input id="wmAnmeldung" type="date"/></div>
+      <div class="field"><label>Gewünschter Eintritt</label><input id="wmGewuenscht" type="date"/></div>
+      <div class="field"><label>Priorität</label><input id="wmPrio" type="number" placeholder="1" min="1"/></div>
+      <div class="field full"><label>Bemerkung</label><input id="wmBemerkung" type="text" placeholder="z.B. Geschwisterkind"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="wmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('warteModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: FERIEN ── -->
+<div class="modal-overlay" id="ferienModal" onclick="if(event.target===this)closeModal('ferienModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="ferienModalTitle">Neuer Eintrag</div>
+    <div class="modal-grid">
+      <div class="field full"><label>Bezeichnung</label><input id="fmBez" type="text" placeholder="Sommerferien 2026"/></div>
+      <div class="field"><label>Von</label><input id="fmVon" type="date"/></div>
+      <div class="field"><label>Bis</label><input id="fmBis" type="date"/></div>
+      <div class="field"><label>Typ</label>
+        <select id="fmTyp">
+          <option value="schliesszeit">🔒 Schliesszeit</option>
+          <option value="ferienprogramm">🎉 Ferienprogramm</option>
+          <option value="betrieb">📅 Normalbetrieb</option>
+        </select>
+      </div>
+      <div class="field full"><label>Bemerkung</label><input id="fmBemerkung" type="text" placeholder="z.B. Notbetreuung auf Anfrage"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="fmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('ferienModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: DOKUMENT ── -->
+<div class="modal-overlay" id="dokumentModal" onclick="if(event.target===this)closeModal('dokumentModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="dokumentModalTitle">Neues Dokument</div>
+    <div class="modal-grid">
+      <div class="field full"><label>Titel</label><input id="dkmTitel" type="text" placeholder="z.B. Betreuungsvertrag 2026"/></div>
+      <div class="field"><label>Zugehöriges Kind</label><select id="dkmKind"></select></div>
+      <div class="field"><label>Typ</label>
+        <select id="dkmTyp">
+          <option value="vertrag">📄 Vertrag</option>
+          <option value="formular">📝 Formular</option>
+          <option value="notiz">🗒️ Notiz</option>
+          <option value="link">🔗 Link</option>
+        </select>
+      </div>
+      <div class="field"><label>Datum</label><input id="dkmDatum" type="date"/></div>
+      <div class="field full"><label>Link / URL (optional)</label><input id="dkmLink" type="url" placeholder="https://drive.google.com/…"/></div>
+      <div class="field full"><label>Notiz / Inhalt</label><textarea id="dkmNotiz" class="field-textarea" placeholder="Notizen zum Dokument…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="dkmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('dokumentModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: MITARBEITER ── -->
+<div class="modal-overlay" id="mitarbModal" onclick="if(event.target===this)closeModal('mitarbModal')">
+  <div class="modal-box">
+    <div class="modal-title" id="mitarbModalTitle">Neuer Mitarbeiter</div>
+    <div class="modal-grid">
+      <div class="field full"><label>Name</label><input id="mmName" type="text" placeholder="Vorname Nachname"/></div>
+      <div class="field"><label>Rolle / Funktion</label><input id="mmRolle" type="text" placeholder="Erzieherin, Leitung…"/></div>
+      <div class="field"><label>Qualifikation</label><input id="mmQuali" type="text" placeholder="FaBe, FAGE, HF…"/></div>
+      <div class="field"><label>Pensum (%)</label><input id="mmPensum" type="number" placeholder="100" min="10" max="100" step="10"/></div>
+      <div class="field"><label>Vertragsart</label>
+        <select id="mmVertrag">
+          <option value="unbefristet">Unbefristet</option>
+          <option value="befristet">Befristet</option>
+          <option value="aushilfe">Aushilfe</option>
+          <option value="praktikum">Praktikum</option>
+        </select>
+      </div>
+      <div class="field"><label>Eintritt</label><input id="mmEintritt" type="date"/></div>
+      <div class="field"><label>Austritt (falls bekannt)</label><input id="mmAustritt" type="date"/></div>
+      <div class="field"><label>Status</label>
+        <select id="mmStatus">
+          <option value="aktiv">Aktiv</option>
+          <option value="inaktiv">Inaktiv / Ehemalig</option>
+        </select>
+      </div>
+      <div class="field"><label>E-Mail</label><input id="mmEmail" type="email" placeholder="name@kita.ch"/></div>
+      <div class="field"><label>Telefon</label><input id="mmTelefon" type="tel" placeholder="+41 79 000 00 00"/></div>
+      <div class="field full"><label>Notizen</label><textarea id="mmNotiz" class="field-textarea" placeholder="Interne Notizen…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="mmSaveBtn">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('mitarbModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: KITA EINSTELLUNGEN ── -->
+<div class="modal-overlay" id="kitaSettingsModal" onclick="if(event.target===this)closeModal('kitaSettingsModal')">
+  <div class="modal-box">
+    <div class="modal-title">⚙️ Kita-Einstellungen (QR-Rechnung)</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:16px">Diese Angaben erscheinen auf jeder QR-Rechnung. Für dauerhafte Speicherung direkt im Code unter <code>KITA_SETTINGS</code> eintragen.</p>
+    <div class="modal-grid">
+      <div class="field full"><label>Name der Kita</label><input id="ksName" type="text" placeholder="Kita Sonnenschein"/></div>
+      <div class="field full"><label>Strasse & Hausnummer</label><input id="ksStrasse" type="text" placeholder="Musterstrasse 1"/></div>
+      <div class="field"><label>PLZ</label><input id="ksPlz" type="text" placeholder="8302"/></div>
+      <div class="field"><label>Ort</label><input id="ksOrt" type="text" placeholder="Kloten"/></div>
+      <div class="field full"><label>IBAN (Schweizer Konto, QR-IBAN empfohlen)</label><input id="ksIban" type="text" placeholder="CH56 0483 5012 3456 7800 9"/></div>
+      <div class="field full"><label>UID / MWST-Nummer</label><input id="ksUid" type="text" placeholder="CHE-123.456.789 MWST"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" onclick="_saveKitaSettings()">Speichern</button>
+      <button class="btn-cancel" onclick="closeModal('kitaSettingsModal')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+</body>
+
 <!-- MODAL: EW NOTIZ -->
 <div class="modal-overlay" id="mEwNotiz" onclick="if(event.target===this)closeModal('mEwNotiz')">
   <div class="modal-box">
@@ -3259,6 +3932,7 @@ function showApp(){ $("loginScreen").style.display="none"; $("appScreen").style.
     </div>
   </div>
 </div>
+
 
 </body>
 </html>
