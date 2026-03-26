@@ -2358,8 +2358,22 @@ window._druckAnwesenheitStats=()=>{
 // ── GROQ KI-ASSISTENT ─────────────────────────────────────
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
-function getGroqKey() { return localStorage.getItem("kitaplaner_groq_key")||""; }
-function setGroqKey(k) { localStorage.setItem("kitaplaner_groq_key", k); }
+let _groqKey = "";
+function getGroqKey() { return _groqKey; }
+async function setGroqKey(k) {
+  _groqKey = k;
+  if(!currentUser) return;
+  try { await setDoc(doc(db,"kunden",currentUser.uid,"settings","groq"),{key:k}); } catch(e){}
+}
+async function loadGroqKey() {
+  if(!currentUser) return;
+  try {
+    const snap = await getDoc(doc(db,"kunden",currentUser.uid,"settings","groq"));
+    if(snap.exists()) { _groqKey = snap.data().key||""; renderAll(); }
+  } catch(e){}
+}
+
+window._updateGroqKey = (v) => { _groqKey = v; setGroqKey(v); };
 
 async function groqCall(systemPrompt, userPrompt, onChunk) {
   const key = getGroqKey();
@@ -2408,8 +2422,8 @@ function renderKiAssistent() {
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <input id="kiApiKey" type="password" class="search" style="width:240px;flex:unset"
-        placeholder="Groq API Key (gsk_…)" value="${key}"
-        oninput="setGroqKey(this.value)"/>
+        placeholder="Groq API Key (gsk_…)" value="${getGroqKey()}"
+        oninput="_updateGroqKey(this.value)"/>
       <a href="https://console.groq.com/keys" target="_blank" class="btn-xs primary">Key holen →</a>
     </div>
   </div>
@@ -2634,7 +2648,7 @@ window._kiDruckText=(id)=>{
 // ── SHOW/HIDE ─────────────────────────────────────────────
 
 function showLogin(){$("loginScreen").style.display="flex";$("appScreen").style.display="none";}
-function showApp(){$("loginScreen").style.display="none";$("appScreen").style.display="block";$("userEmail").textContent=currentUser.email;}
+function showApp(){$("loginScreen").style.display="none";$("appScreen").style.display="block";$("userEmail").textContent=currentUser.email;loadGroqKey();}
 </script>
 <style>
 /* ═══════════════════════════════════════════════════════════
