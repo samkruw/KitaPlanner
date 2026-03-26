@@ -2741,1052 +2741,333 @@ function kiPanelUnfall(unfallId) {
 
 function kiPanelMahnung(rechId) {
   if(!getAiKey()) return "";
-  const safeId=JSON.stringify(rechId);
-  return '<div class="ki-inline-panel" style="margin-top:4px">'
-    +'<div class="ki-inline-title" style="font-size:11px">⚡ KI-Mahnung</div>'
-    +'<div style="display:flex;gap:6px;align-items:center">'
-    +'<select id="kiMStufe_'+rechId+'" class="field-input" style="width:160px;font-size:11px"><option value="1">1. Mahnung</option><option value="2">2. Mahnung</option><option value="3">3. Mahnung</option></select>'
-    +'<button class="ki-btn-sm" onclick="_kiMahnungInline('+safeId+')">✨ Generieren</button>'
-    +'<span id="kiMSpin_'+rechId+'" style="display:none;color:var(--primary);font-size:11px">⚡…</span></div>'
-    +'<div id="kiMOut_'+rechId+'" class="ki-inline-out"></div></div>';
+  return "<div class=\"ki-inline-panel\" style=\"margin-top:4px\">"
+    +"<div class=\"ki-inline-title\" style=\"font-size:11px\">⚡ KI-Mahnung</div>"
+    +"<div style=\"display:flex;gap:6px;align-items:center\">"
+    +"<select id=\"kiMStufe_"+rechId+"\" class=\"field-input\" style=\"width:160px;font-size:11px\"><option value=\"1\">1. Mahnung</option><option value=\"2\">2. Mahnung</option><option value=\"3\">3. Mahnung</option></select>"
+    +"<button class=\"ki-btn-sm\" onclick=\"_kiMahnungInline("+JSON.stringify(rechId)+")\" >✨ Generieren</button>"
+    +"<span id=\"kiMSpin_"+rechId+"\" style=\"display:none;color:var(--primary);font-size:11px\">⚡…</span></div>"
+    +"<div id=\"kiMOut_"+rechId+"\" class=\"ki-inline-out\"></div></div>";
 }
 
+// ── UTILITY FUNCTIONS ─────────────────────────────────────
+function esc(s){ return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function fmtDate(d){ if(!d)return"–"; try{ return new Date(d).toLocaleDateString("de-CH",{day:"2-digit",month:"2-digit",year:"numeric"}); }catch(e){return d||"–";} }
+function age(geb){ if(!geb)return""; const d=new Date(geb),n=new Date(); let a=n.getFullYear()-d.getFullYear(); if(n<new Date(n.getFullYear(),d.getMonth(),d.getDate()))a--; return a; }
+function monatlich(k){ const t=tarife.find(x=>x.id===k.tarif)||tarife[0]||{preis:0}; return Math.round((k.tage?.length||0)*(t.preis||0)*4.33); }
+function subvList(){ return kinder.filter(k=>k.subv); }
 
-</script>
-<style>
-/* ═══════════════════════════════════════════════════════════
-   KITAPLANER — ClickUp-inspired Design
-   Soft gradient bg · White card shell · Clean sidebar
-   Font: DM Sans + Outfit
-═══════════════════════════════════════════════════════════ */
+// ── KITA SETTINGS ─────────────────────────────────────────
+const KITA = { name:"Kita Sonnenschein", strasse:"Musterstrasse 1", plz:"8302", ort:"Kloten", iban:"CH56 0483 5012 3456 7800 9", uid:"CHE-123.456.789 MWST" };
 
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap');
-
-:root {
-  /* Core palette */
-  --primary:        #7B61FF;
-  --primary-soft:   #F0EDFF;
-  --primary-mid:    #C8BFFF;
-  --accent-blue:    #4DA8F5;
-  --accent-pink:    #F06292;
-  --green:          #4CAF7D;
-  --green-soft:     #E8F5EE;
-  --amber:          #F5A623;
-  --amber-soft:     #FEF3DC;
-  --red:            #F44771;
-  --red-soft:       #FEECF1;
-
-  /* Neutrals */
-  --text:           #11181C;
-  --text-2:         #3D444D;
-  --muted:          #8A9BAE;
-  --border:         #ECEEF0;
-  --border-2:       #DDE1E7;
-  --bg:             #F4F5F9;
-  --surface:        #FFFFFF;
-
-  /* Layout */
-  --sidebar-w:      232px;
-  --topbar-h:       54px;
-  --radius:         12px;
-  --radius-sm:      8px;
-  --radius-xs:      6px;
-
-  /* Shadows — ClickUp-style soft */
-  --shadow-xs:  0 1px 3px rgba(0,0,0,.05);
-  --shadow-sm:  0 2px 8px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
-  --shadow:     0 4px 16px rgba(0,0,0,.08), 0 1px 4px rgba(0,0,0,.04);
-  --shadow-lg:  0 12px 40px rgba(0,0,0,.12), 0 3px 8px rgba(0,0,0,.06);
+// ── TOAST ──────────────────────────────────────────────────
+function toast(msg,type="success"){
+  const t=document.createElement("div");
+  t.className="toast toast-"+type; t.textContent=msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>t.classList.add("show"));
+  setTimeout(()=>{ t.classList.remove("show"); setTimeout(()=>t.remove(),300); },2500);
 }
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+// ── AI / GROQ ──────────────────────────────────────────────
+const AI_PROVIDERS = {
+  groq:{ name:"Groq (kostenlos)", models:["llama-3.3-70b-versatile","llama-3.1-8b-instant"], keyLabel:"Groq API Key (gsk_…)", keyUrl:"https://console.groq.com/keys", noKey:false },
+};
+let _aiSettings = { provider:"groq", model:"llama-3.3-70b-versatile", key:"" };
+const getAiProvider = () => AI_PROVIDERS[_aiSettings.provider]||AI_PROVIDERS.groq;
+const getAiKey     = () => _aiSettings.key;
+const getAiModel   = () => _aiSettings.model;
 
-body {
-  font-family: 'DM Sans', system-ui, sans-serif;
-  background: #ECEEF4;
-  color: var(--text);
-  font-size: 13.5px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
+async function saveAiSettings(){
+  if(!currentUser) return;
+  try{ await setDoc(doc(db,"kunden",currentUser.uid,"settings","ai"),{..._aiSettings}); } catch(e){}
+}
+let _saveTimer=null;
+function saveAiSettingsDebounced(){ if(_saveTimer)clearTimeout(_saveTimer); _saveTimer=setTimeout(()=>saveAiSettings(),800); }
+
+async function loadGroqKey(){
+  if(!currentUser) return;
+  try{
+    const snap=await getDoc(doc(db,"kunden",currentUser.uid,"settings","ai"));
+    if(snap.exists()){ Object.assign(_aiSettings,snap.data()); if($("aiKeyInput")&&document.activeElement!==$("aiKeyInput")) $("aiKeyInput").value=_aiSettings.key||""; return; }
+    const old=await getDoc(doc(db,"kunden",currentUser.uid,"settings","groq"));
+    if(old.exists()&&old.data().key){ _aiSettings.key=old.data().key; saveAiSettings(); }
+  } catch(e){ console.error("loadGroqKey:",e); }
+}
+window._updateAiProvider = v=>{ _aiSettings.provider=v; const p=AI_PROVIDERS[v]; _aiSettings.model=p.models[0]; saveAiSettings(); };
+window._updateAiModel    = v=>{ _aiSettings.model=v; saveAiSettings(); };
+window._updateAiKey      = v=>{ _aiSettings.key=v; saveAiSettingsDebounced(); };
+window._saveAiKeyNow     = async v=>{
+  _aiSettings.key=v; await saveAiSettings();
+  const h=$("aiKeySavedHint"); if(h){ h.style.display="inline"; setTimeout(()=>h.style.display="none",2000); }
+};
+
+const KITA_KONTEXT = () => "Du bist Assistent fuer "+KITA.name+", eine Kita in "+KITA.ort+", Schweiz. Antworte auf Schweizer Hochdeutsch, professionell und praegnant.";
+
+async function aiCall(systemPrompt, userPrompt, onChunk){
+  const key=getAiKey();
+  if(!key){ alert("Bitte API Key in den KI-Einstellungen eingeben."); return null; }
+  try{
+    const resp=await fetch("https://api.groq.com/openai/v1/chat/completions",{
+      method:"POST",
+      headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},
+      body:JSON.stringify({ model:getAiModel(), messages:[{role:"system",content:systemPrompt},{role:"user",content:userPrompt}], temperature:0.7, max_tokens:1500, stream:!!onChunk })
+    });
+    if(!resp.ok){ const e=await resp.json(); alert("API Fehler: "+(e.error?.message||resp.status)); return null; }
+    if(onChunk){
+      const reader=resp.body.getReader(), dec=new TextDecoder(); let full="";
+      while(true){
+        const {done,value}=await reader.read(); if(done)break;
+        const lines=dec.decode(value).split("\n").filter(l=>l.startsWith("data:"));
+        for(const line of lines){
+          const raw=line.slice(5).trim(); if(raw==="[DONE]")continue;
+          try{ const d=JSON.parse(raw); const t=d.choices?.[0]?.delta?.content||""; if(t){full+=t;onChunk(full);} }catch(e){}
+        }
+      }
+      return full;
+    } else {
+      const d=await resp.json(); return d.choices?.[0]?.message?.content||"";
+    }
+  } catch(e){ alert("Netzwerkfehler: "+e.message); return null; }
+}
+const groqCall = aiCall;
+
+// ── KI SETTINGS PAGE ──────────────────────────────────────
+function renderKiAssistent(){
+  const key=getAiKey(), saved=!!key;
+  return "<div style=\"max-width:600px\">"
+    +"<div class=\"table-title\" style=\"font-size:18px;margin-bottom:6px\">⚙️ KI-Einstellungen</div>"
+    +"<div class=\"cell-sub\" style=\"margin-bottom:20px\">API Key einmalig speichern — KI-Buttons erscheinen direkt in den Modulen</div>"
+    +"<div class=\"table-card\" style=\"padding:22px;margin-bottom:14px\">"
+    +"<div class=\"table-title\" style=\"margin-bottom:12px\">🔑 API Key</div>"
+    +"<div style=\"display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center\">"
+    +"<input id=\"aiKeyInput\" type=\"password\" class=\"field-input\" placeholder=\""+getAiProvider().keyLabel+"\" value=\""+key+"\" onkeydown=\"if(event.key===&quot;Enter&quot;)_saveAiKeyNow(this.value)\"/>"
+    +"<button class=\"btn-primary\" onclick=\"_saveAiKeyNow($('aiKeyInput').value)\">💾 Speichern</button>"
+    +"<a href=\""+getAiProvider().keyUrl+"\" target=\"_blank\" class=\"btn-secondary\">Key holen →</a></div>"
+    +"<span id=\"aiKeySavedHint\" style=\"font-size:11px;color:var(--green);display:none;margin-top:6px\">✅ Gespeichert</span>"
+    +(saved?"<div style=\"margin-top:10px;font-size:12px;color:var(--green)\">✅ API Key aktiv</div>":"<div style=\"margin-top:10px;font-size:12px;color:var(--amber)\">⚠️ Kein Key</div>")
+    +"</div>"
+    +"<div class=\"table-card\" style=\"padding:22px;margin-bottom:14px\">"
+    +"<div class=\"table-title\" style=\"margin-bottom:12px\">🚀 Direktstart</div>"
+    +"<div style=\"display:flex;gap:10px;flex-wrap:wrap\">"
+    +"<button class=\"btn-primary\" onclick=\"_kiKonzept()\">📖 Päd. Konzept</button>"
+    +"<button class=\"btn-secondary\" onclick=\"_kiElternumfrage()\">📋 Elternumfrage</button>"
+    +"<button class=\"btn-secondary\" onclick=\"_kiQualitaetsbericht()\">📊 Qualitätsbericht</button>"
+    +"<button class=\"btn-secondary\" onclick=\"_setTab('export')\">⬇️ Export</button>"
+    +"</div></div></div>";
 }
 
-/* ── LOGIN SCREEN ───────────────────────────────────────── */
-#loginScreen {
-  display: flex;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #E8E4FF 0%, #F0EDFF 35%, #E4EEFF 65%, #EEE4FF 100%);
+// ── EXPORT ─────────────────────────────────────────────────
+function renderExport(){
+  const cols=[
+    {id:"kinder",label:"👶 Kinder",data:kinder},{id:"rechnungen",label:"🧾 Rechnungen",data:rechnungen},
+    {id:"anwesenheiten",label:"✅ Anwesenheiten",data:anwesenheiten},{id:"nachrichten",label:"💬 Kommunikation",data:nachrichten},
+    {id:"mitarbeiter",label:"👤 Mitarbeiter",data:mitarbeiter},{id:"warteliste",label:"⏳ Warteliste",data:warteliste},
+    {id:"beobachtungen",label:"📋 Beobachtungen",data:beobachtungen},{id:"unfaelle",label:"⚠️ Unfälle",data:unfaelle},
+    {id:"medikamente",label:"💊 Medikamente",data:medikamente},{id:"essensplaene",label:"🍽️ Essensplan",data:essensplaene},
+    {id:"vertraege",label:"📄 Verträge",data:vertraege},{id:"kesb",label:"⚖️ KESB",data:kesb},
+  ];
+  const total=cols.reduce((s,c)=>s+c.data.length,0);
+  const cards=cols.map(c=>{
+    const icon=c.label.split(" ")[0], name=c.label.slice(2);
+    const btns=c.data.length>0
+      ?"<div class=\"row-actions\"><button class=\"btn-xs primary\" onclick=\"_exportCSV('"+c.id+"')\" >CSV</button><button class=\"btn-xs slate\" onclick=\"_exportJSON('"+c.id+"')\" >JSON</button></div>"
+      :"<span class=\"cell-sub\">Leer</span>";
+    return "<div class=\"export-card\"><div style=\"display:flex;align-items:center;gap:10px\">"
+      +"<span style=\"font-size:18px\">"+icon+"</span>"
+      +"<div style=\"flex:1\"><div class=\"cell-main\">"+name+"</div><div class=\"cell-sub\">"+c.data.length+" Einträge</div></div>"
+      +btns+"</div></div>";
+  }).join("");
+  return statsGrid([{icon:"📦",val:total,lbl:"Total",color:"primary"},{icon:"👶",val:kinder.length,lbl:"Kinder"},{icon:"🧾",val:rechnungen.length,lbl:"Rechnungen"},{icon:"✅",val:anwesenheiten.length,lbl:"Anwesenheiten"}])
+    +"<div class=\"toolbar\"><button class=\"btn-primary\" onclick=\"_exportAllesCSV()\">⬇️ Alles als CSV</button><button class=\"btn-secondary\" onclick=\"_exportJSON('all')\">💾 Vollbackup JSON</button></div>"
+    +"<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px\">"+cards+"</div>";
 }
-
-.login-left {
-  flex: 1;
-  background: linear-gradient(145deg, #5B3FE8 0%, #7B61FF 45%, #9B7BFF 100%);
-  display: flex; align-items: center; justify-content: center;
-  padding: 56px 48px;
-  position: relative; overflow: hidden;
+function toCSV(data){
+  if(!data||!data.length)return"";
+  const keys=[...new Set(data.flatMap(o=>Object.keys(o).filter(k=>k!=="id")))];
+  return "\uFEFF"+[keys.join(";"),...data.map(row=>keys.map(k=>{const v=row[k]??""; const s=Array.isArray(v)?v.join(", "):typeof v==="object"?JSON.stringify(v):String(v); return '"'+s.replace(/"/g,'""')+'"';}).join(";"))].join("\n");
 }
-.login-left::before {
-  content: '';
-  position: absolute; inset: 0;
-  background:
-    radial-gradient(ellipse 70% 50% at 15% 85%, rgba(255,255,255,.12) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 50% at 85% 15%, rgba(255,255,255,.07) 0%, transparent 50%);
-}
-.login-left::after {
-  content: '';
-  position: absolute;
-  width: 300px; height: 300px;
-  border-radius: 50%;
-  background: rgba(255,255,255,.05);
-  bottom: -80px; right: -60px;
-}
-.login-left-inner { position: relative; z-index: 1; max-width: 420px; width: 100%; }
-.ll-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 44px; }
-.ll-logo-icon { font-size: 26px; }
-.ll-logo-text { font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -.3px; }
-.ll-headline { font-family: 'Outfit', sans-serif; font-size: 38px; font-weight: 800; color: #fff; line-height: 1.15; letter-spacing: -.8px; margin-bottom: 16px; }
-.ll-sub { font-size: 15px; color: rgba(255,255,255,.72); line-height: 1.65; margin-bottom: 36px; }
-.ll-features { display: flex; flex-direction: column; gap: 10px; margin-bottom: 44px; }
-.ll-feat { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: rgba(255,255,255,.85); }
-.ll-feat-dot { width: 20px; height: 20px; border-radius: 50%; background: rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; font-size: 10px; flex-shrink: 0; }
-.ll-preview { display: flex; gap: 12px; }
-.ll-prev-card {
-  background: rgba(255,255,255,.14);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255,255,255,.22);
-  border-radius: 14px; padding: 16px 18px; flex: 1;
-}
-.ll-prev-card-2 { flex: 0 0 148px; }
-.ll-prev-row { display: flex; align-items: center; gap: 9px; }
-.ll-prev-av { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg,#fff3,#fff1); border: 1px solid rgba(255,255,255,.3); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
-.ll-prev-name { font-size: 12px; font-weight: 600; color: #fff; }
-.ll-prev-sub  { font-size: 10px; color: rgba(255,255,255,.5); }
-.ll-prev-pill { margin-left: auto; background: rgba(255,255,255,.18); color: #fff; border-radius: 20px; padding: 2px 9px; font-size: 10px; font-weight: 600; white-space: nowrap; }
-.ll-prev-stat-label { font-size: 10.5px; color: rgba(255,255,255,.6); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .5px; }
-.ll-prev-stat-val   { font-family: 'Outfit', sans-serif; font-size: 28px; font-weight: 800; color: #fff; letter-spacing: -.5px; line-height: 1; }
-.ll-prev-bar        { height: 4px; background: rgba(255,255,255,.18); border-radius: 2px; margin: 9px 0 6px; overflow: hidden; }
-.ll-prev-bar-fill   { height: 100%; background: rgba(255,255,255,.85); border-radius: 2px; }
-.ll-prev-stat-sub   { font-size: 10px; color: rgba(255,255,255,.45); }
-
-.login-right {
-  width: 480px; min-width: 480px;
-  background: linear-gradient(160deg, #F0EDFF 0%, #EEF2FF 100%);
-  display: flex; align-items: center; justify-content: center;
-  padding: 48px 40px;
-}
-.login-card {
-  background: var(--surface);
-  border-radius: 20px;
-  padding: 38px 34px;
-  width: 100%; max-width: 360px;
-  box-shadow: var(--shadow-lg);
-  border: 1px solid rgba(255,255,255,.8);
-}
-.login-logo  { font-size: 28px; margin-bottom: 8px; }
-.login-title { font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -.4px; }
-.login-sub   { font-size: 13px; color: var(--muted); margin-bottom: 28px; margin-top: 4px; }
-.login-footer{ text-align: center; font-size: 11px; color: var(--muted); margin-top: 22px; }
-.field-group { margin-bottom: 14px; }
-.field-group label { display: block; font-size: 11.5px; font-weight: 600; color: var(--text-2); letter-spacing: .2px; margin-bottom: 5px; }
-.field-group input {
-  width: 100%; padding: 10px 13px;
-  border: 1.5px solid var(--border-2);
-  border-radius: var(--radius-sm);
-  font-size: 13.5px; font-family: inherit; outline: none;
-  background: #FAFBFC; color: var(--text);
-  transition: border-color .15s, box-shadow .15s, background .15s;
-}
-.field-group input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(123,97,255,.12); background: #fff; }
-.login-btn {
-  width: 100%; padding: 11px;
-  background: var(--primary); color: #fff;
-  border: none; border-radius: var(--radius-sm);
-  font-family: inherit; font-size: 14px; font-weight: 600;
-  cursor: pointer; margin-top: 6px;
-  transition: background .15s, box-shadow .15s, transform .1s;
-  letter-spacing: -.1px;
-}
-.login-btn:hover { background: #6B50EF; box-shadow: 0 4px 16px rgba(123,97,255,.4); transform: translateY(-1px); }
-.login-btn:active { transform: translateY(0); }
-#loginErr { color: var(--red); font-size: 12px; margin-top: 8px; min-height: 16px; }
-
-
-
-/* ── APP SHELL ──────────────────────────────────────────── */
-#appScreen { display: none; }
-.app-layout {
-  display: flex; min-height: 100vh;
-  /* ClickUp-style: subtle outer bg, white main card */
-  background: linear-gradient(135deg, #E4E8F4 0%, #EBE8F8 50%, #E8EAF4 100%);
-}
-
-/* ── SIDEBAR ────────────────────────────────────────────── */
-.sidebar {
-  width: var(--sidebar-w); min-width: var(--sidebar-w);
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  display: flex; flex-direction: column;
-  position: fixed; top: 0; left: 0; bottom: 0;
-  z-index: 100; overflow-y: auto;
-  box-shadow: 2px 0 12px rgba(0,0,0,.04);
-}
-.sidebar-logo {
-  padding: 18px 16px 14px;
-  border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 9px;
-}
-.sidebar-logo-icon { font-size: 22px; }
-.sidebar-logo-text { font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 800; color: var(--text); letter-spacing: -.3px; }
-.sidebar-logo-sub  { font-size: 10px; color: var(--muted); }
-
-#sidebarNav { flex: 1; padding: 8px 8px; }
-.nav-group-wrap { margin-bottom: 1px; }
-.nav-group-btn {
-  display: flex; align-items: center; gap: 7px;
-  width: 100%; padding: 6px 9px;
-  border: none; background: none;
-  color: var(--muted); border-radius: var(--radius-sm);
-  font-size: 11px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .6px;
-  cursor: pointer; font-family: inherit; transition: all .12s;
-}
-.nav-group-btn:hover   { background: var(--bg); color: var(--text-2); }
-.nav-group-btn.has-active { color: var(--primary); }
-.nav-group-icon  { font-size: 13px; flex-shrink: 0; }
-.nav-group-label { flex: 1; text-align: left; }
-.nav-group-arrow { font-size: 9px; opacity: .55; }
-.nav-sub         { padding-left: 4px; }
-.nav-sub-item    { padding-left: 14px !important; }
-.nav-item {
-  display: flex; align-items: center; gap: 8px;
-  width: 100%; padding: 6px 9px;
-  border: none; background: none;
-  color: var(--text-2);
-  border-radius: var(--radius-sm);
-  font-size: 12.5px; font-weight: 500;
-  cursor: pointer; text-align: left;
-  font-family: inherit; transition: all .1s;
-}
-.nav-item:hover  { background: var(--bg); color: var(--text); }
-.nav-item.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
-.nav-icon-emoji  { font-size: 13px; flex-shrink: 0; width: 18px; text-align: center; }
-.nav-icon { width: 15px; height: 15px; flex-shrink: 0; opacity: .65; }
-.nav-label { flex: 1; }
-.nav-badge {
-  background: var(--red); color: #fff;
-  border-radius: 10px; font-size: 10px;
-  font-weight: 700; padding: 1px 6px;
-  min-width: 18px; text-align: center;
-}
-
-.sidebar-footer {
-  padding: 10px 8px;
-  border-top: 1px solid var(--border);
-}
-#userEmail { font-size: 11px; color: var(--muted); padding: 0 7px; margin-bottom: 5px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.logout-btn {
-  display: flex; align-items: center; gap: 8px;
-  width: 100%; padding: 7px 9px;
-  border: none; background: none; color: var(--muted);
-  border-radius: var(--radius-xs); font-size: 13px;
-  cursor: pointer; font-family: inherit; transition: all .12s;
-}
-.logout-btn:hover { background: var(--red-soft); color: var(--red); }
-
-/* ── MAIN AREA ──────────────────────────────────────────── */
-.main-area {
-  margin-left: var(--sidebar-w);
-  transition: margin-left .2s ease;
-  flex: 1; display: flex; flex-direction: column;
-  min-height: 100vh;
-}
-
-.topbar {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  height: var(--topbar-h); padding: 0 22px;
-  display: flex; align-items: center; gap: 14px;
-  position: sticky; top: 0; z-index: 50;
-}
-#topbarTitle {
-  font-family: 'Outfit', sans-serif;
-  font-size: 16px; font-weight: 700;
-  color: var(--text); flex: 1; letter-spacing: -.3px;
-}
-#statBar { display: flex; gap: 18px; }
-.stat-pill { display: flex; align-items: center; gap: 5px; }
-.sp-val  { font-size: 13px; font-weight: 700; color: var(--text); }
-.sp-lbl  { font-size: 11.5px; color: var(--muted); }
-
-main { padding: 18px 22px 60px; }
-
-/* ── CARDS ──────────────────────────────────────────────── */
-.table-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: var(--shadow-xs);
-  transition: box-shadow .15s;
-}
-.table-card:hover { box-shadow: var(--shadow-sm); }
-.mb-4 { margin-bottom: 14px; }
-.table-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 13px 18px;
-  border-bottom: 1px solid var(--border);
-}
-.table-title { font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: -.2px; }
-
-/* ── TABLE ──────────────────────────────────────────────── */
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th {
-  padding: 9px 16px; text-align: left;
-  font-size: 11px; font-weight: 700; color: var(--muted);
-  letter-spacing: .4px; text-transform: uppercase;
-  border-bottom: 1px solid var(--border);
-  background: #FAFBFD; white-space: nowrap;
-}
-td {
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
-tr:last-child td { border-bottom: none; }
-tbody tr { transition: background .1s; }
-tbody tr:hover td { background: #FAFCFF; }
-.cell-main { font-weight: 500; color: var(--text); }
-.cell-sub  { font-size: 12px; color: var(--muted); margin-top: 1px; }
-td .cell-sub { margin-top: 0; }
-.fw6 { font-weight: 600; }
-.fs12 { font-size: 12px; }
-.flex-1 { flex: 1; }
-.ml-auto { margin-left: auto; }
-
-/* ── STATS GRID ─────────────────────────────────────────── */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(148px,1fr));
-  gap: 10px; margin-bottom: 16px;
-}
-.stat-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  box-shadow: var(--shadow-xs);
-  transition: box-shadow .15s, transform .15s;
-  cursor: default;
-}
-.stat-card:hover { box-shadow: var(--shadow-sm); transform: translateY(-1px); }
-.sc-icon { font-size: 17px; margin-bottom: 9px; }
-.sc-val  { font-family: 'Outfit', sans-serif; font-size: 24px; font-weight: 800; line-height: 1; color: var(--text); letter-spacing: -.5px; }
-.sc-val.primary { color: var(--primary); }
-.sc-val.green   { color: var(--green); }
-.sc-val.amber   { color: var(--amber); }
-.sc-val.red     { color: var(--red); }
-.sc-lbl { font-size: 11.5px; color: var(--muted); margin-top: 4px; font-weight: 500; }
-.sc-sub { font-size: 10.5px; color: var(--border-2); margin-top: 2px; }
-.stat-val { font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 800; }
-.stat-val.green   { color: var(--green); }
-.stat-val.primary { color: var(--primary); }
-.stat-val.amber   { color: var(--amber); }
-
-/* ── TOOLBAR ────────────────────────────────────────────── */
-.toolbar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
-.tally   { font-size: 11px; color: var(--muted); margin-top: 6px; }
-.search  {
-  flex: 1; min-width: 200px; padding: 8px 13px;
-  border: 1.5px solid var(--border-2); border-radius: 20px;
-  font-size: 13px; font-family: inherit; outline: none;
-  background: var(--surface); color: var(--text);
-  transition: border-color .15s, box-shadow .15s;
-}
-.search:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(123,97,255,.1); }
-.empty-state { text-align: center; padding: 48px; color: var(--muted); font-size: 13px; }
-.section-intro {
-  background: var(--primary-soft); border: 1px solid var(--primary-mid);
-  border-radius: var(--radius-sm); padding: 11px 15px;
-  font-size: 12.5px; color: #4B3DB5; margin-bottom: 16px;
-}
-
-/* ── BUTTONS ────────────────────────────────────────────── */
-.btn-primary {
-  background: var(--primary); color: #fff;
-  border: none; border-radius: 20px;
-  padding: 7px 16px; font-weight: 600;
-  font-size: 13px; cursor: pointer; font-family: inherit;
-  transition: background .12s, box-shadow .12s, transform .1s;
-  white-space: nowrap;
-}
-.btn-primary:hover { background: #6B50EF; box-shadow: 0 4px 12px rgba(123,97,255,.35); transform: translateY(-1px); }
-.btn-primary:active { transform: translateY(0); }
-
-.btn-secondary {
-  background: var(--surface); color: var(--text-2);
-  border: 1.5px solid var(--border-2);
-  border-radius: 20px; padding: 7px 14px;
-  font-weight: 500; font-size: 13px;
-  cursor: pointer; font-family: inherit; white-space: nowrap;
-  transition: all .12s;
-}
-.btn-secondary:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
-
-.act-btn {
-  background: none; border: 1px solid var(--border);
-  border-radius: var(--radius-xs); padding: 4px 8px;
-  font-size: 12px; cursor: pointer; color: var(--muted);
-  transition: all .1s;
-}
-.act-btn:hover { background: var(--bg); color: var(--text); border-color: var(--border-2); }
-.act-btn.danger { border-color: #fecdd3; color: var(--red); }
-.act-btn.danger:hover { background: var(--red-soft); }
-
-.btn-xs {
-  border: none; border-radius: 20px; padding: 4px 11px;
-  font-size: 11.5px; font-weight: 600; cursor: pointer;
-  font-family: inherit; white-space: nowrap; transition: all .1s;
-}
-.btn-xs.green   { background: var(--green-soft); color: var(--green); }
-.btn-xs.green:hover { background: #d1fae5; }
-.btn-xs.red     { background: var(--red-soft); color: var(--red); }
-.btn-xs.red:hover { background: #fecdd3; }
-.btn-xs.primary { background: var(--primary-soft); color: var(--primary); }
-.btn-xs.primary:hover { background: var(--primary-mid); }
-.btn-xs.slate   { background: var(--bg); color: var(--text-2); }
-.btn-xs.slate:hover { background: var(--border-2); }
-
-/* ── TAG CHIPS ──────────────────────────────────────────── */
-.tage-row { display: flex; gap: 3px; flex-wrap: wrap; }
-.tage-pip {
-  font-size: 10px; font-weight: 600; padding: 2px 6px;
-  border-radius: 20px; background: var(--bg);
-  color: #C0C8D4; border: 1px solid var(--border);
-}
-.tage-pip.on { background: var(--primary-soft); color: var(--primary); border-color: var(--primary-mid); }
-.tag-btn {
-  padding: 5px 12px; border: 1.5px solid var(--border-2);
-  border-radius: 20px; font-size: 12px; font-weight: 500;
-  cursor: pointer; background: var(--surface); color: var(--text-2);
-  font-family: inherit; transition: all .12s;
-}
-.tag-btn.on { background: var(--primary); color: #fff; border-color: var(--primary); }
-.tag-btn:hover:not(.on) { border-color: var(--primary); color: var(--primary); }
-
-.row-actions { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-
-/* ── AVATAR ─────────────────────────────────────────────── */
-.avatar-circle {
-  width: 34px; height: 34px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent-blue) 100%);
-  color: #fff; display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 12px; flex-shrink: 0;
-  box-shadow: var(--shadow-xs);
-}
-.avatar-circle.sm { width: 28px; height: 28px; font-size: 10px; }
-
-/* ── INFO CARDS ─────────────────────────────────────────── */
-.info-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(340px,1fr)); gap: 12px; }
-.info-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-xs); }
-.info-card-header { display: flex; align-items: center; gap: 11px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
-.info-card-body   { padding: 12px 16px; }
-.info-section-title { font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
-.info-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.info-row:last-child { border-bottom: none; }
-.allergie-badge { background: var(--red-soft); color: var(--red); border: 1px solid #fecdd3; border-radius: 20px; padding: 2px 9px; font-size: 11px; font-weight: 600; }
-
-/* ── EINGEWÖHNUNG ───────────────────────────────────────── */
-.ew-grid  { display: grid; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap: 12px; }
-.ew-card  { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow-xs); transition: box-shadow .15s; }
-.ew-card:hover { box-shadow: var(--shadow-sm); }
-.ew-header{ display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.ew-progress-bar  { height: 3px; background: var(--border); border-radius: 2px; margin: 0 0 14px; overflow: hidden; }
-.ew-progress-fill { height: 100%; background: linear-gradient(90deg,var(--primary),var(--accent-blue)); border-radius: 2px; transition: width .5s cubic-bezier(.34,1.56,.64,1); }
-.ew-phases{ display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
-.ew-phase { display: flex; align-items: center; gap: 9px; opacity: .35; }
-.ew-phase.done, .ew-phase.active { opacity: 1; }
-.ew-phase-dot { width: 20px; height: 20px; border-radius: 50%; background: var(--border); color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
-.ew-phase.done .ew-phase-dot { background: var(--green); color: #fff; }
-.ew-phase.active .ew-phase-dot { background: var(--primary); color: #fff; }
-.ew-phase-label { font-size: 12px; font-weight: 500; }
-.ew-actions { display: flex; align-items: center; gap: 6px; }
-.ew-notes { margin: 8px 0; border-top: 1px solid var(--border); padding-top: 8px; }
-.ew-note-item { display: flex; align-items: flex-start; gap: 7px; padding: 4px 0; font-size: 12px; border-bottom: 1px solid var(--border); }
-.ew-note-item:last-child { border-bottom: none; }
-
-/* ── BEOBACHTUNGEN ──────────────────────────────────────── */
-.beob-kind-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow-xs); transition: box-shadow .15s; }
-.beob-kind-card:hover { box-shadow: var(--shadow-sm); }
-.beob-radar     { display: flex; flex-direction: column; gap: 5px; }
-.beob-bereich   { display: flex; align-items: center; gap: 6px; }
-.beob-icon      { font-size: 13px; width: 18px; text-align: center; }
-.beob-bar-wrap  { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.beob-bar-fill  { height: 100%; border-radius: 3px; transition: width .4s; }
-.beob-score     { font-size: 11px; font-weight: 600; color: var(--muted); min-width: 22px; text-align: right; }
-.stufe-stars    { display: flex; gap: 1px; }
-.star-on  { color: #F5A623; font-size: 13px; }
-.star-off { color: var(--border-2); font-size: 13px; }
-.star-btn { background: none; border: none; cursor: pointer; font-size: 22px; color: var(--border-2); padding: 0 2px; transition: color .1s; }
-.star-btn.on    { color: #F5A623; }
-.star-btn:hover { color: #F5A623; }
-
-/* ── ESSENSPLAN ─────────────────────────────────────────── */
-.essen-week { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap: 8px; padding: 12px 16px; }
-.essen-col  { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; min-height: 90px; transition: box-shadow .1s; }
-.essen-col:hover { box-shadow: var(--shadow-xs); }
-.essen-col.today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
-.essen-header { padding: 8px 10px; background: #FAFBFD; border-bottom: 1px solid var(--border); }
-.essen-col.today .essen-header { background: var(--primary-soft); }
-.essen-meal   { padding: 8px 10px; display: flex; gap: 7px; align-items: flex-start; cursor: pointer; }
-.meal-icon    { font-size: 15px; flex-shrink: 0; }
-.meal-tag     { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 20px; margin-top: 3px; }
-.meal-tag.vegi { background: var(--green-soft); color: var(--green); }
-.essen-snack  { padding: 4px 10px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); }
-.essen-add    { width: 100%; padding: 12px; background: none; border: none; color: var(--muted); font-size: 12px; cursor: pointer; font-family: inherit; transition: all .1s; }
-.essen-add:hover { color: var(--primary); background: var(--primary-soft); }
-
-/* ── MITARBEITER ────────────────────────────────────────── */
-.ma-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap: 12px; }
-.ma-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; gap: 12px; align-items: flex-start; box-shadow: var(--shadow-xs); transition: box-shadow .15s; }
-.ma-card:hover { box-shadow: var(--shadow-sm); }
-.ma-av   { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg,var(--primary),var(--accent-blue)); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
-.ma-stats{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; background: var(--bg); border-radius: var(--radius-sm); padding: 8px 10px; }
-
-/* ── KALENDER ───────────────────────────────────────────── */
-.kal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
-.kal-hdr  { text-align: center; font-size: 10px; font-weight: 700; color: var(--muted); padding: 5px 0; letter-spacing: .3px; text-transform: uppercase; }
-.kal-cell { min-height: 48px; border: 1px solid var(--border); border-radius: 8px; padding: 4px 5px; cursor: pointer; background: var(--surface); transition: all .12s; }
-.kal-cell:hover { background: var(--primary-soft); border-color: var(--primary-mid); }
-.kal-cell.today { border-color: var(--primary); background: var(--primary-soft); }
-.kal-cell.empty { background: transparent; border-color: transparent; cursor: default; }
-.kal-day  { font-size: 11px; font-weight: 600; color: var(--text-2); }
-.kal-cell.today .kal-day { color: var(--primary); font-weight: 700; }
-.kal-dots { display: flex; gap: 2px; flex-wrap: wrap; margin-top: 3px; }
-.kal-dot  { width: 5px; height: 5px; border-radius: 50%; }
-.komm-row { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 1px solid var(--border); cursor: pointer; border-radius: var(--radius-xs); transition: background .1s; }
-.komm-row:hover { background: var(--bg); }
-.komm-row:last-child { border-bottom: none; }
-.komm-date{ font-size: 10px; font-weight: 600; color: var(--muted); min-width: 36px; }
-
-/* ── DIENSTPLAN ─────────────────────────────────────────── */
-.week-grid  { display: grid; grid-template-columns: repeat(auto-fit,minmax(120px,1fr)); gap: 8px; }
-.week-col   { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
-.week-col.today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
-.week-hdr   { padding: 8px 10px; background: #FAFBFD; font-size: 11.5px; font-weight: 600; text-align: center; border-bottom: 1px solid var(--border); color: var(--text-2); }
-.week-col.today .week-hdr { background: var(--primary-soft); color: var(--primary); }
-.week-entry { padding: 7px 10px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s; }
-.week-entry:hover { background: var(--bg); }
-.week-empty { padding: 12px; color: var(--border-2); font-size: 12px; text-align: center; }
-
-/* ── CHART ──────────────────────────────────────────────── */
-.chart-bars { display: flex; align-items: flex-end; gap: 4px; min-width: 800px; height: 110px; padding-bottom: 22px; }
-.bar-col    { flex: 1; display: flex; flex-direction: column; align-items: center; }
-.bar        { width: 100%; border-radius: 5px 5px 0 0; min-height: 4px; }
-.bar-tip    { font-size: 9px; color: var(--muted); margin-bottom: 2px; }
-.bar-lbl    { font-size: 9px; color: var(--muted); transform: rotate(-40deg); transform-origin: top left; white-space: nowrap; margin-top: 5px; margin-left: 5px; }
-.prog-row   { display: flex; align-items: center; gap: 6px; }
-.prog-bg    { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; min-width: 50px; }
-.prog-fill  { height: 100%; border-radius: 3px; }
-
-/* ── TAGESSTRUKTUR ──────────────────────────────────────── */
-.tages-week { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 8px; overflow-x:auto; }
-.tages-col  { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
-.tages-col-hdr { padding: 8px 10px; background: #FAFBFD; font-size: 11.5px; font-weight: 600; text-align: center; border-bottom: 1px solid var(--border); color: var(--primary); }
-.tages-slot { padding: 7px 10px; border-bottom: 1px solid var(--border); transition: background .1s; }
-.tages-slot:last-child { border-bottom: none; }
-.tages-slot.filled { background: var(--primary-soft); }
-.tages-slot:hover  { background: var(--bg); }
-.tages-slot-label  { font-size: 11px; font-weight: 600; color: var(--text-2); }
-.tages-eintrag     { font-size: 11px; color: var(--primary); margin-top: 2px; font-weight: 500; }
-.tages-slot-header { font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 10px; }
-.tages-slot-row    { display: grid; grid-template-columns: 180px 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
-.tages-slot-row:last-of-type { border-bottom: none; }
-.tages-slot-meta   { display: flex; flex-direction: column; gap: 2px; }
-.tages-slot-label-inp { font-size: 12px !important; padding: 4px 7px !important; }
-.tages-slot-zeit-inp  { font-size: 11px !important; padding: 3px 7px !important; color: var(--muted); }
-.tages-slot-val-inp   { font-size: 12.5px; }
-.tages-add-btn { display: flex; align-items: center; justify-content: center; width: 100%; margin-top: 10px; padding: 9px; background: var(--primary-soft); color: var(--primary); border: 1.5px dashed var(--primary-mid); border-radius: var(--radius-sm); font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all .12s; }
-.tages-add-btn:hover { background: var(--primary-mid); }
-.tages-remove-btn { padding: 4px 8px !important; font-size: 16px !important; line-height: 1; }
-
-/* ── MODALS ─────────────────────────────────────────────── */
-.modal-overlay {
-  display: none; position: fixed; inset: 0;
-  background: rgba(17,24,28,.4); z-index: 200;
-  align-items: center; justify-content: center;
-  backdrop-filter: blur(8px);
-}
-.modal-overlay.open { display: flex; animation: fadeIn .15s ease; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-.modal-box {
-  background: var(--surface); border-radius: 18px;
-  padding: 28px 28px 22px; width: 100%; max-width: 520px;
-  box-shadow: var(--shadow-lg); border: 1px solid rgba(255,255,255,.9);
-  max-height: 90vh; overflow-y: auto;
-  animation: slideUp .22s cubic-bezier(.34,1.56,.64,1);
-}
-@keyframes slideUp { from { opacity: 0; transform: translateY(16px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
-.modal-title { font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 18px; letter-spacing: -.3px; }
-.modal-footer { display: flex; gap: 8px; margin-top: 18px; }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.field label { display: block; font-size: 11.5px; font-weight: 600; color: var(--text-2); letter-spacing: .2px; margin-bottom: 4px; }
-.field.full { grid-column: 1/-1; }
-.field-input, .field input, .field select, .field textarea {
-  width: 100%; padding: 8.5px 12px;
-  border: 1.5px solid var(--border-2); border-radius: var(--radius-sm);
-  font-size: 13px; font-family: inherit; outline: none;
-  background: #FAFBFC; color: var(--text);
-  transition: border-color .15s, box-shadow .15s, background .15s;
-}
-.field-input:focus, .field input:focus, .field select:focus, .field textarea:focus {
-  border-color: var(--primary); box-shadow: 0 0 0 3px rgba(123,97,255,.1); background: #fff;
-}
-.field textarea { resize: vertical; min-height: 76px; }
-.modal-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 3px; }
-.modal-check { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; margin-top: 4px; color: var(--text-2); }
-.btn-save { flex: 1; padding: 10px; background: var(--primary); color: #fff; border: none; border-radius: var(--radius-sm); font-family: inherit; font-weight: 600; font-size: 13.5px; cursor: pointer; transition: background .12s, box-shadow .12s; }
-.btn-save:hover { background: #6B50EF; box-shadow: 0 4px 12px rgba(123,97,255,.35); }
-.btn-cancel { padding: 10px 16px; background: none; color: var(--muted); border: 1.5px solid var(--border-2); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; cursor: pointer; transition: all .12s; }
-.btn-cancel:hover { background: var(--bg); color: var(--text-2); }
-
-
-  .ki-inline-panel      { background:linear-gradient(135deg,#f0f4ff,#f8fafc);border:1px solid var(--primary-mid);border-radius:var(--radius);padding:16px;margin:12px 0; }
-  .ki-inline-title      { font-size:12.5px;font-weight:700;color:var(--primary);margin-bottom:10px;display:flex;align-items:center;gap:6px; }
-  .ki-inline-out        { }
-  .ki-inline-out-text   { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-size:12px;line-height:1.7;color:var(--text);white-space:pre-wrap;max-height:280px;overflow-y:auto;margin-top:8px; }
-  .ki-inline-locked     { background:var(--bg);border:1px dashed var(--border-2);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;margin:8px 0; }
-  .ki-btn-sm            { background:linear-gradient(135deg,var(--primary),#60a5fa);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:opacity .15s; }
-  .ki-btn-sm:hover      { opacity:.88; }
-
-  /* ── KI-ASSISTENT ────────────────────────────────────────── */
-.ki-header     { display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px;flex-wrap:wrap; }
-.ki-title      { font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.4px; }
-.ki-grid       { display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px; }
-.ki-card       { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow-xs);display:flex;flex-direction:column;gap:12px; }
-.ki-card-icon  { font-size:24px; }
-.ki-card-title { font-size:14px;font-weight:700;color:var(--text);letter-spacing:-.2px; }
-.ki-card-sub   { font-size:12px;color:var(--muted);margin-top:-6px; }
-.ki-fields     { display:flex;flex-direction:column;gap:8px; }
-.ki-fields .field label { font-size:11px;font-weight:600;color:var(--text-2);display:block;margin-bottom:3px; }
-.ki-btn        { background:linear-gradient(135deg,var(--primary),#60a5fa);color:#fff;border:none;border-radius:var(--radius-sm);padding:9px 16px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:-.1px;transition:opacity .15s,box-shadow .15s; }
-.ki-btn:hover  { opacity:.9;box-shadow:0 4px 14px rgba(59,111,232,.35); }
-.ki-btn:active { opacity:.8; }
-.ki-result     { min-height:20px; }
-.ki-loading    { color:var(--primary);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;animation:pulse 1.2s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
-.ki-output     { background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap;max-height:300px;overflow-y:auto; }
-.ki-actions    { display:flex;gap:6px;margin-top:8px;flex-wrap:wrap; }
-
-/* ── DASHBOARD ──────────────────────────────────────────── */
-.dash-kpi         { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow-xs);transition:box-shadow .15s,transform .15s; }
-.dash-kpi:hover   { box-shadow:var(--shadow-sm);transform:translateY(-1px); }
-.dash-kpi-icon    { font-size:18px;margin-bottom:8px; }
-.dash-kpi-val     { font-size:26px;font-weight:800;line-height:1;letter-spacing:-.6px;color:var(--text); }
-.dash-kpi-val.primary { color:var(--primary); }
-.dash-kpi-val.green   { color:var(--green); }
-.dash-kpi-val.amber   { color:var(--amber); }
-.dash-kpi-val.red     { color:var(--red); }
-.dash-kpi-lbl     { font-size:12px;color:var(--muted);margin-top:4px;font-weight:500; }
-.dash-kpi-sub     { font-size:11px;color:var(--muted);margin-top:2px; }
-.dash-info-row    { display:flex;align-items:flex-start;gap:10px;padding:4px 0; }
-.dash-info-icon   { font-size:18px;flex-shrink:0;margin-top:1px; }
-.dash-quick-btn   { display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border:1.5px solid var(--border-2);border-radius:var(--radius-sm);background:var(--surface);cursor:pointer;font-family:inherit;transition:all .12s;text-align:left; }
-.dash-quick-btn:hover { border-color:var(--primary);background:var(--primary-light);color:var(--primary); }
-
-/* ── RESPONSIVE ─────────────────────────────────────────── */
-.checked-row td { opacity: .5; }
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* ── PRINT STYLES ──────────────────────────────── */
-
-  /* ── SUB-TABS ──────────────────────────────────────────── */
-  .sub-tabs       { display:flex;gap:4px;margin-bottom:16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px;flex-wrap:wrap; }
-  .sub-tab        { padding:6px 14px;border:none;border-radius:6px;background:none;font-family:inherit;font-size:12.5px;font-weight:500;color:var(--muted);cursor:pointer;transition:all .12s;white-space:nowrap; }
-  .sub-tab:hover  { background:var(--surface);color:var(--text); }
-  .sub-tab.active { background:var(--surface);color:var(--primary);font-weight:700;box-shadow:var(--shadow-xs); }
-
-  /* ── TOAST ─────────────────────────────────────────────── */
-  .toast          { position:fixed;bottom:20px;right:20px;z-index:9999;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transform:translateY(8px);transition:all .25s;box-shadow:var(--shadow);max-width:300px; }
-  .toast.show     { opacity:1;transform:translateY(0); }
-  .toast-success  { background:#16a34a;color:#fff; }
-  .toast-error    { background:var(--red);color:#fff; }
-  .toast-info     { background:var(--primary);color:#fff; }
-
-  @media print {
-  .sidebar, .topbar, .toolbar, .row-actions, .act-btn, .btn-primary, .btn-secondary { display: none !important; }
-  .main-area { margin-left: 0; }
-  main { padding: 0; }
-  .table-card { box-shadow: none; border: 1pt solid #e2e8f0; }
-  .stat-card  { box-shadow: none; border: 1pt solid #e2e8f0; }
-}
-</style>
-</head>
-<body>
-
-<!-- LOGIN -->
-<div id="loginScreen">
-  <!-- Left panel: branding -->
-  <div class="login-left">
-    <div class="login-left-inner">
-      <div class="ll-logo">
-        <span class="ll-logo-icon">🏡</span>
-        <span class="ll-logo-text">KitaPlaner</span>
-      </div>
-      <div class="ll-headline">Verwaltung für<br/>Schweizer Kitas.</div>
-      <div class="ll-sub">Belegung, Rechnungen, Kommunikation und mehr — alles in einer modernen App.</div>
-      <div class="ll-features">
-        <div class="ll-feat"><span class="ll-feat-dot"></span>Belegungsverwaltung & Warteliste</div>
-        <div class="ll-feat"><span class="ll-feat-dot"></span>QR-Rechnungen (SIX Standard)</div>
-        <div class="ll-feat"><span class="ll-feat-dot"></span>Eingewöhnung & Entwicklungsberichte</div>
-        <div class="ll-feat"><span class="ll-feat-dot"></span>Essensplan & Notfallkontakte</div>
-      </div>
-      <!-- Decorative card previews -->
-      <div class="ll-preview">
-        <div class="ll-prev-card">
-          <div class="ll-prev-row">
-            <div class="ll-prev-av">LM</div>
-            <div><div class="ll-prev-name">Lena Müller</div><div class="ll-prev-sub">Eintritt 01.08.2025</div></div>
-            <div class="ll-prev-pill">Aktiv</div>
-          </div>
-          <div class="ll-prev-row" style="margin-top:8px">
-            <div class="ll-prev-av" style="background:linear-gradient(135deg,#22c55e,#86efac)">NB</div>
-            <div><div class="ll-prev-name">Noah Brunner</div><div class="ll-prev-sub">Eintritt 01.09.2025</div></div>
-            <div class="ll-prev-pill">Subv.</div>
-          </div>
-        </div>
-        <div class="ll-prev-card ll-prev-card-2">
-          <div class="ll-prev-stat-label">Auslastung</div>
-          <div class="ll-prev-stat-val">87%</div>
-          <div class="ll-prev-bar"><div class="ll-prev-bar-fill" style="width:87%"></div></div>
-          <div class="ll-prev-stat-sub">17 / 20 Plätze belegt</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Right panel: form -->
-  <div class="login-right">
-    <div class="login-card">
-      <div class="login-logo">🏡</div>
-      <div class="login-title">Willkommen zurück</div>
-      <div class="login-sub">Melde dich mit deinem Kita-Konto an</div>
-      <div class="field-group">
-        <label>E-Mail-Adresse</label>
-        <input id="loginEmail" type="email" placeholder="name@kita.ch" autocomplete="username"/>
-      </div>
-      <div class="field-group">
-        <label>Passwort</label>
-        <input id="loginPw" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')_login()"/>
-      </div>
-      <button class="login-btn" onclick="_login()">Anmelden</button>
-      <div id="loginErr"></div>
-      <div class="login-footer">KitaPlaner · Schweizer Verwaltungssoftware</div>
-    </div>
-  </div>
-</div>
-
-<!-- APP -->
-<div id="appScreen">
-<div class="app-layout">
-  <nav class="sidebar">
-    <div class="sidebar-logo">
-      <span class="sidebar-logo-icon">🏡</span>
-      <div><div class="sidebar-logo-text">KitaPlaner</div><div class="sidebar-logo-sub">Verwaltung · CH</div></div>
-    </div>
-    <div id="sidebarNav"></div>
-    <div class="sidebar-footer">
-      <span id="userEmail"></span>
-      <button class="logout-btn" onclick="_logout()"><span>↩</span><span>Abmelden</span></button>
-    </div>
-  </nav>
-  <div class="main-area">
-    <div class="topbar">
-      <div id="topbarTitle">Dashboard</div>
-      <div style="flex:1"></div>
-      <div id="statBar"></div>
-      <button class="topbar-icon-btn" title="Vollbild" onclick="document.documentElement.requestFullscreen?.()">⛶</button>
-      <button class="topbar-icon-btn" title="Einstellungen" onclick="_openKitaSettings()">⚙️</button>
-    </div>
-    <main><div id="tabContent"></div></main>
-  </div>
-</div>
-</div>
-
-<!-- MODAL: TARIF -->
-<div class="modal-overlay" id="mTarif" onclick="if(event.target===this)closeModal('mTarif')">
-  <div class="modal-box" style="max-width:400px">
-    <div class="modal-title" id="tarifTitle">Tarif</div>
-    <div class="form-grid">
-      <div class="field full"><label>Name</label><input id="tmName" type="text" placeholder="z.B. Vollzeit, Teilzeit…"/></div>
-      <div class="field"><label>Preis pro Tag (CHF)</label><input id="tmPreis" type="number" step="5" min="0"/></div>
-      <div class="field"><label>Beschreibung</label><input id="tmBeschr" type="text" placeholder="z.B. 4–5 Tage/Woche"/></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-save" id="tmSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mTarif')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: KIND -->
-<div class="modal-overlay" id="mKind" onclick="if(event.target===this)closeModal('mKind')">
-  <div class="modal-box">
-    <div class="modal-title" id="kindModalTitle">Kind</div>
-    <div class="form-grid">
-      <div class="field full"><label>Name</label><input id="kmName" type="text" placeholder="Vorname Nachname"/></div>
-      <div class="field"><label>Geburtsdatum</label><input id="kmGeb" type="date"/></div>
-      <div class="field"><label>Elternteil / Kontakt</label><input id="kmEltern" type="text" placeholder="Name"/></div>
-      <div class="field"><label>Eintritt</label><input id="kmEintritt" type="date"/></div>
-      <div class="field"><label>Austritt</label><input id="kmAustritt" type="date"/></div>
-      <div class="field"><label>Tarif</label><select id="kmTarif"></select></div>
-      <div class="field full"><label>Anwesenheitstage</label><div class="modal-tags" id="kmTage"></div></div>
-      <div class="field full"><label class="modal-check"><input id="kmSubv" type="checkbox"/> Subventionierter Platz</label></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-save" id="kmSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mKind')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: RECHNUNG -->
-<div class="modal-overlay" id="mRech" onclick="if(event.target===this)closeModal('mRech')">
-  <div class="modal-box">
-    <div class="modal-title" id="rechTitle">Rechnung</div>
-    <div class="form-grid">
-      <div class="field"><label>Nr.</label><input id="rmNr" type="text" placeholder="2026-01-001"/></div>
-      <div class="field"><label>Kind</label><select id="rmKind"></select></div>
-      <div class="field"><label>Betrag (CHF)</label><input id="rmBetrag" type="number" step="0.05"/></div>
-      <div class="field"><label>MWST (%)</label><input id="rmMwst" type="number" step="0.1" value="8.1"/></div>
-      <div class="field"><label>Rechnungsdatum</label><input id="rmDatum" type="date"/></div>
-      <div class="field"><label>Fällig am</label><input id="rmFaellig" type="date"/></div>
-      <div class="field full"><label>Bemerkung</label><input id="rmBemerkung" type="text" placeholder="Betreuung Januar 2026"/></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-save" id="rmSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mRech')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: NACHRICHT -->
-<div class="modal-overlay" id="mNachr" onclick="if(event.target===this)closeModal('mNachr')">
-  <div class="modal-box" style="max-width:540px">
-    <div class="modal-title" id="nachrTitle">Eintrag</div>
-    <div class="form-grid">
-      <div class="field full"><label>Betreff</label><input id="nmBetreff" type="text" placeholder="Titel / Betreff"/></div>
-      <div class="field"><label>Empfänger</label><select id="nmEmpfaenger"></select></div>
-      <div class="field"><label>Typ</label>
-        <select id="nmTyp">
-          <option value="monatsbeitrag">💰 Monatsbeitrag</option>
-          <option value="event">🎉 Event</option>
-          <option value="termin">📅 Termin</option>
-          <option value="info">ℹ️ Info</option>
-          <option value="brief">📄 Elternbrief</option>
-          <option value="email">📧 E-Mail</option>
-        </select>
-      </div>
-      <div class="field"><label>Datum</label><input id="nmDatum" type="date"/></div>
-      <div id="nmBetragRow" style="display:contents">
-        <div class="field"><label>Betrag (CHF)</label><input id="nmBetrag" type="number" step="0.05" placeholder="0.00"/></div>
-        <div class="field"><label>Zahlbar bis</label><input id="nmFaellig" type="date"/></div>
-      </div>
-      <div class="field full"><label>Inhalt</label><textarea id="nmInhalt" style="min-height:100px" placeholder="Liebe Eltern&#10;&#10;Text..."></textarea></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-save" id="nmSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mNachr')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: DIENSTPLAN -->
-<div class="modal-overlay" id="mDienst" onclick="if(event.target===this)closeModal('mDienst')">
-  <div class="modal-box">
-    <div class="modal-title" id="dienstTitle">Diensteintrag</div>
-    <div class="form-grid">
-      <div class="field full"><label>Mitarbeiter/in</label><select id="dmMitarbeiter"></select></div>
-      <div class="field"><label>Datum</label><input id="dmDatum" type="date"/></div>
-      <div class="field"><label>Typ</label><select id="dmTyp"><option value="betreuung">👶 Betreuung</option><option value="admin">🏢 Admin</option></select></div>
-      <div class="field"><label>Von</label><input id="dmVon" type="time"/></div>
-      <div class="field"><label>Bis</label><input id="dmBis" type="time"/></div>
-      <div class="field full"><label>Aufgabe</label><input id="dmAufgabe" type="text" placeholder="Morgenbetreuung"/></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-save" id="dmSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mDienst')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: MITARBEITER -->
-<div class="modal-overlay" id="mMitarb" onclick="if(event.target===this)closeModal('mMitarb')">
-  <div class="modal-box">
-    <div class="modal-title" id="mitarbTitle">Mitarbeiter</div>
-    <div class="form-grid">
-      <div class="field full"><label>Name</label><input id="maName" type="text" placeholder="Vorname Nachname"/></div>
-      <div class="field"><label>Rolle</label><input id="maRolle" type="text" placeholder="Erzieherin, Leitung…"/></div>
-      <div class="field"><label>Qualifikation</label><input id="maQuali" type="text" placeholder="FaBe, FAGE, HF…"/></div>
-      <div class="field"><label>Pensum (%)</label><input id="maPensum" type="number" min="10" max="100" step="10"/></div>
-      <div class="field"><label>Vertragsart</label><select id="maVertrag"><option value="unbefristet">Unbefristet</option><option value="befristet">Befristet</option><option value="aushilfe">Aushilfe</option><option value="praktikum">Praktikum</option></select></div>
-      <div class="field"><label>Eintritt</label><input id="maEintritt" type="date"/></div>
-      <div class="field"><label>Austritt</label><input id="maAustritt" type="date"/></div>
-      <div class="field"><label>Status</label><select id="maStatus"><option value="aktiv">Aktiv</option><option value="inaktiv">Inaktiv</option></select></div>
-      <div class="field"><label>E-Mail</label><input id="maEmail" type="email"/></div>
-      <div class="field"><label>Telefon</label><input id="maTelefon" type="tel"/></div>
-      <div class="field full"><label>Notizen</label><textarea id="maNotiz"></textarea></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-save" id="maSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mMitarb')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: WARTELISTE -->
-<div class="modal-overlay" id="mWarte" onclick="if(event.target===this)closeModal('mWarte')">
-  <div class="modal-box">
-    <div class="modal-title" id="warteTitle">Warteliste</div>
-    <div class="form-grid">
-      <div class="field full"><label>Name Kind</label><input id="wmName" type="text"/></div>
-      <div class="field"><label>Geburtsdatum</label><input id="wmGeb" type="date"/></div>
-      <div class="field"><label>Elternteil</label><input id="wmEltern" type="text"/></div>
-      <div class="field"><label>Anmeldedatum</label><input id="wmAnm" type="date"/></div>
-      <div class="field"><label>Gewünschter Eintritt</label><input id="wmGew" type="date"/></div>
-      <div class="field"><label>Priorität</label><input id="wmPrio" type="number" min="1"/></div>
-      <div class="field full"><label>Bemerkung</label><input id="wmBem" type="text"/></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-save" id="wmSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mWarte')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: FERIEN -->
-<div class="modal-overlay" id="mFerien" onclick="if(event.target===this)closeModal('mFerien')">
-  <div class="modal-box">
-    <div class="modal-title" id="ferienTitle">Ferienplan</div>
-    <div class="form-grid">
-      <div class="field full"><label>Bezeichnung</label><input id="fmBez" type="text" placeholder="Sommerferien 2026"/></div>
-      <div class="field"><label>Von</label><input id="fmVon" type="date"/></div>
-      <div class="field"><label>Bis</label><input id="fmBis" type="date"/></div>
-      <div class="field"><label>Typ</label><select id="fmTyp"><option value="schliesszeit">🔒 Schliesszeit</option><option value="ferienprogramm">🎉 Ferienprogramm</option><option value="betrieb">📅 Betrieb</option></select></div>
-      <div class="field full"><label>Bemerkung</label><input id="fmBem" type="text"/></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-save" id="fmSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mFerien')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: DOKUMENT -->
-<div class="modal-overlay" id="mDoku" onclick="if(event.target===this)closeModal('mDoku')">
-  <div class="modal-box">
-    <div class="modal-title" id="dokuTitle">Dokument</div>
-    <div class="form-grid">
-      <div class="field full"><label>Titel</label><input id="dkTitel" type="text" placeholder="Betreuungsvertrag 2026"/></div>
-      <div class="field"><label>Kind</label><select id="dkKind"></select></div>
-      <div class="field"><label>Typ</label><select id="dkTyp"><option value="vertrag">📄 Vertrag</option><option value="formular">📝 Formular</option><option value="notiz">🗒️ Notiz</option><option value="link">🔗 Link</option></select></div>
-      <div class="field"><label>Datum</label><input id="dkDatum" type="date"/></div>
-      <div class="field full"><label>Link / URL</label><input id="dkLink" type="url" placeholder="https://…"/></div>
-      <div class="field full"><label>Notiz</label><textarea id="dkNotiz"></textarea></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-save" id="dkSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mDoku')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: NOTFALL / ALLERGIE -->
-<div class="modal-overlay" id="mNotfall" onclick="if(event.target===this)closeModal('mNotfall')">
-  <div class="modal-box">
-    <div class="modal-title" id="notfallTitle">Notfallkontakt</div>
-    <input type="hidden" id="nfKindId"/><input type="hidden" id="nfKindName"/>
-    <div class="form-grid">
-      <div class="field"><label>Typ</label><select id="nfTyp"><option value="notfall">🚨 Notfallkontakt</option><option value="allergie">⚠️ Allergie/Hinweis</option></select></div>
-      <div class="field"><label>Bezeichnung</label><input id="nfTitel" type="text" placeholder="Mutter, Vater, Hausarzt…"/></div>
-      <div class="field full"><label>Telefon / Kontakt</label><input id="nfTel" type="text" placeholder="+41 79 000 00 00"/></div>
-      <div class="field full"><label>Notiz / Details</label><textarea id="nfNotiz" placeholder="Zusätzliche Informationen…"></textarea></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-save" id="nfSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mNotfall')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: ESSENSPLAN -->
-<div class="modal-overlay" id="mEssen" onclick="if(event.target===this)closeModal('mEssen')">
-  <div class="modal-box">
-    <div class="modal-title" id="essenTitle">Menü planen</div>
-    <div class="form-grid">
-      <div class="field full"><label>Datum</label><input id="essenDatum" type="date"/></div>
-      <div class="field full"><label>Mittagessen</label><input id="essenMittagessen" type="text" placeholder="z.B. Zürcher Geschnetzeltes mit Rösti"/></div>
-      <div class="field full"><label>Znüni / Dessert</label><input id="essenZnueni" type="text" placeholder="z.B. Früchtequark"/></div>
-      <div class="field full"><label class="modal-check"><input id="essenVegi" type="checkbox"/> Vegetarische Option vorhanden</label></div>
-      <div class="field full"><label>Notizen / Allergiehinweise</label><textarea id="essenNotizen" placeholder="z.B. Enthält Nüsse"></textarea></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-save" id="essenSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mEssen')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: VERTRAG -->
-<div class="modal-overlay" id="mVertrag" onclick="if(event.target===this)closeModal('mVertrag')">
-  <div class="modal-box">
-    <div class="modal-title" id="vertragTitle">Betreuungsvertrag</div>
-    <div class="form-grid">
-      <div class="field full"><label>Kind</label><select id="vtKind"></select></div>
-      <div class="field"><label>Vertragsbeginn</label><input id="vtVon" type="date"/></div>
-      <div class="field"><label>Vertragsende (leer = unbefristet)</label><input id="vtBis" type="date"/></div>
-      <div class="field"><label>Pensum (%)</label><input id="vtPensum" type="number" min="10" max="100" step="10" value="100"/></div>
-      <div class="field"><label>Monatsbeitrag (CHF)</label><input id="vtBeitrag" type="text" placeholder="gemäss Tarif"/></div>
-      <div class="field"><label>Status</label><select id="vtStatus"><option value="aktiv">Aktiv</option><option value="inaktiv">Inaktiv</option></select></div>
-      <div class="field full"><label>Betreuungstage</label><div class="modal-tags" id="vtTage"></div></div>
-      <div class="field full"><label>Besondere Vereinbarungen</label><textarea id="vtNotizen" placeholder="z.B. Ferienregelung, Sonderbedingungen…"></textarea></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-save" id="vtSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mVertrag')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: KITA SETTINGS -->
-<div class="modal-overlay" id="mKitaSettings" onclick="if(event.target===this)closeModal('mKitaSettings')">
-  <div class="modal-box">
-    <div class="modal-title" id="kitaSettingsTitle">Kita-Einstellungen</div>
-    <div class="form-grid">
-      <div class="field full"><label>Name der Kita</label><input id="ksName" type="text"/></div>
-      <div class="field full"><label>Strasse</label><input id="ksStrasse" type="text"/></div>
-      <div class="field"><label>PLZ</label><input id="ksPlz" type="text"/></div>
-      <div class="field"><label>Ort</label><input id="ksOrt" type="text"/></div>
-      <div class="field full"><label>IBAN</label><input id="ksIban" type="text"/></div>
-      <div class="field full"><label>UID / MWST-Nr.</label><input id="ksUid" type="text"/></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-save" id="ksSave">Speichern</button>
-      <button class="btn-cancel" onclick="closeModal('mKitaSettings')">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
+function downloadFile(content,filename,mime){ const b=new Blob([content],{type:mime}),a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=filename; a.click(); URL.revokeObjectURL(a.href); }
+window._exportCSV = col=>{ const map={kinder,rechnungen,anwesenheiten,nachrichten,mitarbeiter,warteliste,beobachtungen,unfaelle,medikamente,essensplaene,vertraege,kesb}; const d=map[col]||[]; if(!d.length){alert("Keine Daten.");return;} downloadFile(toCSV(d),KITA.name+"_"+col+"_"+new Date().toISOString().slice(0,10)+".csv","text/csv;charset=utf-8"); };
+window._exportJSON = col=>{ if(col==="all"){ downloadFile(JSON.stringify({exportDatum:new Date().toISOString(),kita:KITA,kinder,tarife,rechnungen,anwesenheiten,nachrichten,mitarbeiter,warteliste,beobachtungen,unfaelle,medikamente,essensplaene,vertraege,kesb,checklisten},null,2),KITA.name+"_Backup_"+new Date().toISOString().slice(0,10)+".json","application/json"); } else { const map={kinder,rechnungen,anwesenheiten,nachrichten,mitarbeiter,warteliste,beobachtungen,unfaelle,medikamente,essensplaene,vertraege,kesb}; downloadFile(JSON.stringify(map[col]||[],null,2),KITA.name+"_"+col+"_"+new Date().toISOString().slice(0,10)+".json","application/json"); } };
+window._exportAllesCSV = ()=>{ const cols={Kinder:kinder,Rechnungen:rechnungen,Anwesenheiten:anwesenheiten,Mitarbeiter:mitarbeiter,Warteliste:warteliste,Beobachtungen:beobachtungen}; let c=""; Object.entries(cols).forEach(([n,d])=>{ if(d.length)c+="\n=== "+n+" ===\n"+toCSV(d)+"\n"; }); downloadFile("\uFEFF"+c,KITA.name+"_Export_"+new Date().toISOString().slice(0,10)+".csv","text/csv;charset=utf-8"); };
+
+// ── KI INLINE HANDLERS ─────────────────────────────────────
+function _kiOut(id,html){ const el=$(id); if(el)el.innerHTML=html; }
+function _kiSpin(id,on){ const el=$(id); if(el)el.style.display=on?"inline":"none"; }
+
+window._kiElternbriefInline=async()=>{
+  const thema=$("kiBThema")?.value||"Info", ton=$("kiBTon")?.value||"freundlich", stich=$("kiBStich")?.value?.trim()||"";
+  _kiSpin("kiBSpin",true); _kiOut("kiBOut",""); _kiOut("kiBAct","");
+  const sys=KITA_KONTEXT()+" Schreibe Elternbriefe fuer Schweizer Kitas. Keine Emojis im Brief.";
+  const usr=ton+" Brief zum Thema \""+thema+"\". Details: "+(stich||"keine")+". Struktur: Betreff, Liebe Eltern, Text, "+KITA.name+". Max 220 Woerter.";
+  const r=await groqCall(sys,usr,t=>{ _kiOut("kiBOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>")+"</div>"); });
+  _kiSpin("kiBSpin",false);
+  if(r) _kiOut("kiBAct","<button class=\"btn-xs primary\" onclick=\"_kiAlsNachricht('"+encodeURIComponent(r)+"','"+encodeURIComponent(thema)+"')\" >→ In Kommunikation</button><button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiBOut')\" >📋</button>");
+};
+
+window._kiEssensplanInline=async()=>{
+  const s=$("kiESaison")?.value||"aktuell", k=$("kiEKueche")?.value||"Schweizer", a=$("kiEAllerg")?.value||"keine";
+  _kiSpin("kiESpin",true); _kiOut("kiEOut",""); _kiOut("kiEAct","");
+  const r=await groqCall(KITA_KONTEXT()+" Mahlzeiten 1-5 Jahre, kindgerecht.","Wochen-Menueplan Mo-Fr, "+s+", Kueche: "+k+", Allergien: "+a+". Format: **Tag:** Mittag: ... | Vegi: ... | Znueni: ...",t=>{ _kiOut("kiEOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>"); });
+  _kiSpin("kiESpin",false);
+  if(r) _kiOut("kiEAct","<button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiEOut')\" >📋 Kopieren</button>");
+};
+
+window._kiBeobInline=async(kindId,kindName)=>{
+  const notiz=$("kiBeobN_"+kindId)?.value?.trim(); if(!notiz){alert("Notizen eingeben.");return;}
+  _kiSpin("kiBeobSpin_"+kindId,true); _kiOut("kiBeobOut_"+kindId,"");
+  const k=kinder.find(x=>x.id===kindId)||{};
+  const r=await groqCall(KITA_KONTEXT()+" FaBe-Sprache, paedagogische Berichte.","Entwicklungsbericht "+kindName+" ("+(k.geb?age(k.geb)+" J.":"")+"). Notizen: "+notiz+". Bereiche: Motorik, Sprache, Sozial, Kognitiv, Zusammenfassung. Max 300W.",t=>{ _kiOut("kiBeobOut_"+kindId,"<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>"); });
+  _kiSpin("kiBeobSpin_"+kindId,false);
+  if(r) { const el=$("kiBeobOut_"+kindId); if(el)el.innerHTML+="<div style=\"display:flex;gap:6px;margin-top:6px\"><button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiBeobOut_"+kindId+"')\" >📋</button></div>"; }
+};
+
+window._kiSuvaInline=async(unfallId)=>{
+  const u=unfaelle.find(x=>x.id===unfallId); if(!u)return;
+  _kiSpin("kiSuvaSpin_"+unfallId,true); _kiOut("kiSuvaOut_"+unfallId,"");
+  const r=await groqCall(KITA_KONTEXT()+" SUVA-Berichte, sachlich, Behoerdendeutsch CH.","Unfallbericht: "+u.kindName+", "+fmtDate(u.datum)+", "+u.art+". Hergang: "+(u.beschreibung||"-")+". Verletzung: "+(u.verletzung||"-")+". Massnahmen: "+(u.massnahmen||"-")+". Abschnitte: 1.Hergang 2.Verletzung 3.Massnahmen 4.Empfehlung.",t=>{ _kiOut("kiSuvaOut_"+unfallId,"<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>")+"</div>"); });
+  _kiSpin("kiSuvaSpin_"+unfallId,false);
+  if(r){ const el=$("kiSuvaOut_"+unfallId); if(el)el.innerHTML+="<div style=\"display:flex;gap:6px;margin-top:6px\"><button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiSuvaOut_"+unfallId+"')\" >📋</button></div>"; }
+};
+
+window._kiMahnungInline=async(rechId)=>{
+  const r=rechnungen.find(x=>x.id===rechId); if(!r)return;
+  const stufe=$("kiMStufe_"+rechId)?.value||"1";
+  _kiSpin("kiMSpin_"+rechId,true); _kiOut("kiMOut_"+rechId,"");
+  const tage=Math.round((new Date()-new Date(r.faellig))/86400000);
+  const res=await groqCall(KITA_KONTEXT()+" Mahnschreiben. 1=freundlich, 2=bestimmt, 3=letzte Warnung.",stufe+". Mahnung. "+r.kindName+", CHF "+r.betrag+", "+tage+" Tage ueberfaellig. IBAN: "+KITA.iban+". Frist 10 Tage. Max 180W.",t=>{ _kiOut("kiMOut_"+rechId,"<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>")+"</div>"); });
+  _kiSpin("kiMSpin_"+rechId,false);
+  if(res){ const el=$("kiMOut_"+rechId); if(el)el.innerHTML+="<div style=\"display:flex;gap:6px;margin-top:6px\"><button class=\"btn-xs primary\" onclick=\"_kiDruckText('kiMOut_"+rechId+"')\" >🖨️</button><button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiMOut_"+rechId+"')\" >📋</button></div>"; }
+};
+
+window._kiMonatInline=async()=>{
+  _kiSpin("kiMonatSpin",true); _kiOut("kiMonatOut","");
+  const umsatz=Math.round(kinder.reduce((s,k)=>s+monatlich(k),0));
+  const offen=rechnungen.filter(r=>r.status==="offen");
+  const r=await groqCall(KITA_KONTEXT(),"Monatsabschluss "+new Date().toLocaleDateString("de-CH",{month:"long",year:"numeric"})+". Kinder: "+kinder.length+", Umsatz: CHF "+umsatz.toLocaleString("de-CH")+", Offen: "+offen.length+" CHF "+Math.round(offen.reduce((s,r)=>s+(r.betrag||0),0)).toLocaleString("de-CH")+". Erstelle: 1.Zusammenfassung 2.Elternbrief 3.To-Do. Max 300W.",t=>{ _kiOut("kiMonatOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>"); });
+  _kiSpin("kiMonatSpin",false);
+  if(r){ const el=$("kiMonatOut"); if(el)el.innerHTML+="<div style=\"display:flex;gap:6px;margin-top:6px\"><button class=\"btn-xs primary\" onclick=\"_kiDruckText('kiMonatOut')\" >🖨️</button><button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiMonatOut')\" >📋</button></div>"; }
+};
+
+window._kiAnwInline=async()=>{
+  _kiSpin("kiAnwInlSpin",true); _kiOut("kiAnwInlOut","");
+  const days30=Array.from({length:30},(_,i)=>{ const d=new Date(Date.now()-i*86400000); return d.toISOString().slice(0,10); });
+  let stats="";
+  kinder.forEach(k=>{ const a=anwesenheiten.filter(x=>x.kindId===k.id&&days30.includes(x.datum)); const anw=a.filter(x=>x.status==="anwesend").length, abw=a.filter(x=>x.status==="abwesend").length; if(anw+abw>0)stats+=k.name+": "+anw+"x an, "+abw+"x ab\n"; });
+  const r=await groqCall(KITA_KONTEXT()+" Anwesenheitsanalyse, Muster erkennen.","Letzte 30 Tage:\n"+(stats||"Keine Daten.")+". Erstelle: 1.Zusammenfassung 2.Muster 3.Empfehlungen. Max 250W.",t=>{ _kiOut("kiAnwInlOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>"); });
+  _kiSpin("kiAnwInlSpin",false);
+  if(r){ const el=$("kiAnwInlOut"); if(el)el.innerHTML+="<div style=\"display:flex;gap:6px;margin-top:6px\"><button class=\"btn-xs primary\" onclick=\"_kiDruckText('kiAnwInlOut')\" >🖨️</button><button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiAnwInlOut')\" >📋</button></div>"; }
+};
+
+window._kiFinInline=async()=>{
+  _kiSpin("kiFinInlSpin",true); _kiOut("kiFinInlOut","");
+  const umsatz=Math.round(kinder.reduce((s,k)=>s+monatlich(k),0));
+  const offen=rechnungen.filter(r=>r.status==="offen"), bez=rechnungen.filter(r=>r.status==="bezahlt");
+  const r=await groqCall(KITA_KONTEXT()+" Finanzberichte.","Finanzbericht "+KITA.name+": "+kinder.length+" Kinder/"+Math.round(kinder.length/20*100)+"%, SOLL CHF "+umsatz.toLocaleString("de-CH")+"/Mt, Offen: "+offen.length+"x CHF "+Math.round(offen.reduce((s,r)=>s+(r.betrag||0),0)).toLocaleString("de-CH")+". Executive Summary, Kennzahlen, Risiken, Ausblick. Max 250W.",t=>{ _kiOut("kiFinInlOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>"); });
+  _kiSpin("kiFinInlSpin",false);
+  if(r){ const el=$("kiFinInlOut"); if(el)el.innerHTML+="<div style=\"display:flex;gap:6px;margin-top:6px\"><button class=\"btn-xs primary\" onclick=\"_kiDruckText('kiFinInlOut')\" >🖨️</button><button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiFinInlOut')\" >📋</button></div>"; }
+};
+
+window._kiTagesrapportInline=async()=>{
+  _kiSpin("kiTagesrapportSpin",true); _kiOut("kiTagesrapportOut","");
+  const today=new Date().toISOString().slice(0,10);
+  const anwH=anwesenheiten.filter(a=>a.datum===today);
+  const menu=essensplaene.find(e=>e.datum===today);
+  const r=await groqCall(KITA_KONTEXT()+" Tagesberichte, warm und positiv.","Tagesrapport "+new Date().toLocaleDateString("de-CH",{weekday:"long",day:"numeric",month:"long"})+". Anwesend: "+(anwH.filter(a=>a.status==="anwesend").map(a=>a.kindName).join(", ")||"-")+". Mittagessen: "+(menu?.mittagessen||"-")+". Herzlicher Bericht, Kinder erlebt, Abschluss. Max 150W.",t=>{ _kiOut("kiTagesrapportOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>")+"</div>"); });
+  _kiSpin("kiTagesrapportSpin",false);
+  if(r){ const el=$("kiTagesrapportOut"); if(el)el.innerHTML+="<div style=\"display:flex;gap:6px;margin-top:6px\"><button class=\"btn-xs primary\" onclick=\"_kiAlsNachricht('"+encodeURIComponent(r)+"','Tagesrapport')\" >→ In Kommunikation</button><button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiTagesrapportOut')\" >📋</button></div>"; }
+};
+
+window._kiElternGespraechInline=async()=>{
+  _kiSpin("kiElternGespSpin",true); _kiOut("kiElternGespOut","");
+  const filterId=window._beobKindFilter&&window._beobKindFilter!=="alle"?window._beobKindFilter:null;
+  const k=filterId?kinder.find(x=>x.id===filterId):kinder[0];
+  if(!k){ _kiOut("kiElternGespOut","<div class=\"cell-sub\">Kind im Filter waehlen.</div>"); _kiSpin("kiElternGespSpin",false); return; }
+  const beobK=beobachtungen.filter(b=>b.kindId===k.id).slice(0,5);
+  const r=await groqCall(KITA_KONTEXT()+" Elterngespraech-Leitfaeden.","Gespraechsleitfaden fuer "+k.name+" ("+(k.geb?age(k.geb)+" J.":"")+"). Beobachtungen: "+(beobK.map(b=>b.bereich+": "+b.beobachtung?.slice(0,60)).join(" | ")||"keine")+". Abschnitte: 1.Begruessung 2.Positives 3.Entwicklung 4.Ziele 5.Abschluss. Max 300W.",t=>{ _kiOut("kiElternGespOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>"); });
+  _kiSpin("kiElternGespSpin",false);
+  if(r){ const el=$("kiElternGespOut"); if(el)el.innerHTML+="<div style=\"display:flex;gap:6px;margin-top:6px\"><button class=\"btn-xs primary\" onclick=\"_kiDruckText('kiElternGespOut')\" >🖨️</button><button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiElternGespOut')\" >📋</button></div>"; }
+};
+
+window._kiFoerderzieleInline=async()=>{
+  _kiSpin("kiFoerderSpin",true); _kiOut("kiFoerderOut","");
+  const filterId=window._beobKindFilter&&window._beobKindFilter!=="alle"?window._beobKindFilter:null;
+  const k=filterId?kinder.find(x=>x.id===filterId):kinder[0];
+  if(!k){ _kiOut("kiFoerderOut","<div class=\"cell-sub\">Kind im Filter waehlen.</div>"); _kiSpin("kiFoerderSpin",false); return; }
+  const beobK=beobachtungen.filter(b=>b.kindId===k.id).slice(0,6);
+  const beobText=beobK.map(b=>b.bereich+": "+b.beobachtung?.slice(0,80)+" ("+b.stufe+"/5)").join(" | ")||"Keine Beobachtungen.";
+  const r=await groqCall(KITA_KONTEXT()+" SMART-Foerderziele, FaBe-Sprache.","5 Foerderziele fuer "+k.name+" ("+(k.geb?age(k.geb)+" J.":"")+"). Beobachtungen: "+beobText+". Je 1 Ziel: Motorik, Sprache, Sozial, Kognitiv, Kreativitaet. Format: [Bereich]: [Ziel] - Bis: [Zeitraum] - Massnahme: [wie]. Max 250W.",t=>{ _kiOut("kiFoerderOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>"); });
+  _kiSpin("kiFoerderSpin",false);
+  if(r){ const el=$("kiFoerderOut"); if(el)el.innerHTML+="<div style=\"display:flex;gap:6px;margin-top:6px\"><button class=\"btn-xs primary\" onclick=\"_kiDruckText('kiFoerderOut')\" >🖨️</button><button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiFoerderOut')\" >📋</button></div>"; }
+};
+
+window._kiStelleninserat=async()=>{
+  _kiSpin("kiStellenSpin",true); _kiOut("kiStellenOut","");
+  const r=await groqCall(KITA_KONTEXT()+" Stelleninserate, Schweizer Arbeitsmarkt.","Inserat fuer "+KITA.name+" in "+KITA.ort+". FaBe/FAGE, 60-100%, 0-5 J. Struktur: Einleitung, Aufgaben, Anforderungen, Angebot, Bewerbung. Max 300W.",t=>{ _kiOut("kiStellenOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>"); });
+  _kiSpin("kiStellenSpin",false);
+  if(r){ const el=$("kiStellenOut"); if(el)el.innerHTML+="<div style=\"display:flex;gap:6px;margin-top:6px\"><button class=\"btn-xs primary\" onclick=\"_kiDruckText('kiStellenOut')\" >🖨️</button><button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiStellenOut')\" >📋</button></div>"; }
+};
+
+window._kiWochenrueckblickInline=async()=>{
+  if(!getAiKey()){alert("API Key in KI-Einstellungen eingeben.");return;}
+  const now=new Date(), sow=new Date(now);
+  sow.setDate(now.getDate()-((now.getDay()||7)-1));
+  const menus=essensplaene.filter(e=>{ const d=new Date(e.datum); return d>=sow&&d<=now; });
+  const win=window.open("","_blank","width=640,height=500");
+  win.document.write("<html><head><meta charset=\'UTF-8\'></head><body style=\'font-family:Arial;padding:20px\'><h2>📝 Wochenrueckblick…</h2><div id=\'r\' style=\'white-space:pre-wrap;line-height:1.7;font-size:13px\'></div></body></html>");
+  const r=await groqCall(KITA_KONTEXT()+" Wochenrueckblicke fuer Eltern, warm.","Wochenrueckblick "+sow.toLocaleDateString("de-CH")+". Menues: "+(menus.map(m=>m.mittagessen||"-").join(", ")||"-")+". Kinder: "+kinder.length+". Freudiger Rueckblick, Highlights, Vorschau. Max 200W.",t=>{ win.document.getElementById("r").textContent=t; });
+  if(r)win.document.body.innerHTML+="<button onclick=\'window.print()\' style=\'margin:10px;padding:8px 16px;background:#2563EB;color:#fff;border:none;border-radius:6px;cursor:pointer\'>🖨️ Drucken</button>";
+};
+
+window._kiBeschwerdeQuick=async()=>{
+  const text=prompt("Elternbeschwerde eingeben:"); if(!text)return;
+  _kiSpin("kiQualKommSpin",true); _kiOut("kiQualKommOut","");
+  const r=await groqCall(KITA_KONTEXT()+" Beschwerdemanagement, deeskalierend.","Beschwerde: \""+text+"\". Antwort: Empathie, Sachverhalt, Loesung, Gespraechsbereitschaft. Absender: "+KITA.name+". Max 200W.",t=>{ _kiOut("kiQualKommOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>")+"</div>"); });
+  _kiSpin("kiQualKommSpin",false);
+  if(r){ const el=$("kiQualKommOut"); if(el)el.innerHTML+="<div style=\"display:flex;gap:6px;margin-top:6px\"><button class=\"btn-xs primary\" onclick=\"_kiAlsNachricht('"+encodeURIComponent(r)+"','Antwort auf Ihre Mitteilung')\" >→ In Kommunikation</button><button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiQualKommOut')\" >📋</button></div>"; }
+};
+
+window._kiQualitaetsbericht=async()=>{
+  if(!getAiKey()){alert("API Key eingeben.");return;}
+  const win=window.open("","_blank","width=800,height=700");
+  win.document.write("<html><head><meta charset=\'UTF-8\'><style>body{font-family:Arial;padding:40px;max-width:750px;line-height:1.8}h2{color:#2563EB;border-bottom:1pt solid #e2e8f0;padding-bottom:4px}</style></head><body><h2>⚡ Qualitaetsbericht "+new Date().getFullYear()+"</h2><div id=\'r\'></div></body></html>");
+  await groqCall(KITA_KONTEXT()+" Qualitaetsberichte nach kibesuisse-Standards.","Qualitaetsbericht "+new Date().getFullYear()+" fuer "+KITA.name+": "+kinder.length+"/20 Plaetze ("+Math.round(kinder.length/20*100)+"%), "+subvList().length+" subv., "+mitarbeiter.filter(m=>m.status==="aktiv").length+" Mitarbeiter. Struktur: 1.Summary 2.Belegung 3.Betreuung 4.Sicherheit 5.Personal 6.Finanzen 7.Ziele. Ca 400W.",t=>{ win.document.getElementById("r").innerHTML=t.replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br/>"); });
+  win.document.body.innerHTML+="<button onclick=\'window.print()\' style=\'margin:15px 0;padding:10px 20px;background:#2563EB;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700\'>🖨️ Drucken</button>";
+};
+
+window._kiKonzept=async()=>{
+  if(!getAiKey()){alert("API Key eingeben.");return;}
+  const win=window.open("","_blank","width=900,height=700");
+  win.document.write("<html><head><meta charset=\'UTF-8\'><style>body{font-family:Arial;padding:40px;max-width:750px;line-height:1.8}h1{color:#2563EB}h2{color:#1e40af;margin-top:20px;border-bottom:1pt solid #e2e8f0;padding-bottom:4px}</style></head><body><h1>⚡ Paedagogisches Konzept</h1><div id=\'r\'></div></body></html>");
+  await groqCall(KITA_KONTEXT()+" Paedagogische Konzepte nach kibesuisse.","Konzept fuer "+KITA.name+" in "+KITA.ort+". 20 Plaetze ("+kinder.length+" Kinder), "+mitarbeiter.filter(m=>m.status==="aktiv").length+" FTE. Abschnitte: 1.Leitbild 2.Philosophie 3.Eingewoehnung 4.Tagesstruktur 5.Ernaehrung 6.Eltern 7.Team 8.Raum 9.Inklusion 10.Datenschutz. Ca 600W.",t=>{ win.document.getElementById("r").innerHTML=t.replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br/>"); });
+  win.document.body.innerHTML+="<button onclick=\'window.print()\' style=\'margin:15px 0;padding:10px 20px;background:#2563EB;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700\'>🖨️ Drucken</button>";
+};
+
+window._kiElternumfrage=async()=>{
+  if(!getAiKey()){alert("API Key eingeben.");return;}
+  const win=window.open("","_blank","width=800,height=650");
+  win.document.write("<html><head><meta charset=\'UTF-8\'><style>@page{size:A4;margin:15mm}body{font-family:Arial;font-size:11pt;padding:20px}h1{color:#2563EB}h2{font-size:11pt;font-weight:700;margin:16px 0 6px}</style></head><body><h1>🏡 "+esc(KITA.name)+" - Elternumfrage</h1><div id=\'r\'><em>Generiere Umfrage...</em></div></body></html>");
+  await groqCall(KITA_KONTEXT()+" Elternumfragen fuer Schweizer Kitas.","15 Fragen Elternumfrage fuer "+KITA.name+": 10 Skalenfragen (Sehr zufrieden / Zufrieden / Neutral / Unzufrieden / Sehr unzufrieden), 3 Ja/Nein, 2 offene Fragen. Kategorien: Kommunikation, Betreuung, Personal, Raeume, Allgemein. Schweizer Hochdeutsch.",t=>{ win.document.getElementById("r").innerHTML=t.replace(/\*\*(.*?)\*\*/g,"<h2>$1</h2>").replace(/\n/g,"<br/>"); });
+  win.document.body.innerHTML+="<button onclick=\'window.print()\' style=\'position:fixed;bottom:20px;right:20px;padding:10px 20px;background:#2563EB;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.15)\'>🖨️ Drucken</button>";
+};
+
+window._kiWillkommenInline=async(kindId,kindName)=>{
+  if(!getAiKey()){alert("API Key eingeben.");return;}
+  const k=kinder.find(x=>x.id===kindId); if(!k)return;
+  const win=window.open("","_blank","width=640,height=500");
+  win.document.write("<html><head><meta charset=\'UTF-8\'></head><body style=\'font-family:Arial;padding:20px\'><h2>📬 Willkommensbrief...</h2><div id=\'r\'></div></body></html>");
+  const r=await groqCall(KITA_KONTEXT()+" Willkommensbriefe, warm und persoenlich.","Willkommensbrief fuer "+k.name+(k.geb?" ("+age(k.geb)+" Jahre)":"")+". Eltern: "+(k.eltern||"die Eltern")+". Eintritt: "+fmtDate(k.eintritt)+". Tage: "+(k.tage?.join(", ")||"-")+". Herzlich, persoenlich, Eingewoehnung erwaehnen. Max 200W.",t=>{ win.document.getElementById("r").innerHTML="<pre style=\'white-space:pre-wrap;font-family:Arial;font-size:13px\'>"+t+"</pre>"; });
+  if(r)win.document.body.innerHTML+="<button onclick=\'window.print()\' style=\'margin:10px;padding:8px 16px;background:#2563EB;color:#fff;border:none;border-radius:6px;cursor:pointer\'>🖨️ Drucken</button>";
+};
+
+window._kiAlsNachricht=(enc,betreff)=>{ const text=decodeURIComponent(enc); _setTab("kommunikation"); setTimeout(()=>{ _openNachrichtModal(null,null,"brief"); setTimeout(()=>{ if($("nmInhalt"))$("nmInhalt").value=text; if($("nmBetreff"))$("nmBetreff").value=decodeURIComponent(betreff); },100); },200); };
+window._kiCopy=(btn,id)=>{ const el=$(id); const text=el?.querySelector(".ki-inline-out-text")?.innerText||el?.innerText||""; navigator.clipboard.writeText(text).then(()=>{ const old=btn.textContent; btn.textContent="✅"; setTimeout(()=>btn.textContent=old,2000); }).catch(()=>alert("Kopieren nicht moeglich")); };
+window._kiDruckText=id=>{ const text=$(id)?.querySelector(".ki-inline-out-text")?.innerText||""; const w=window.open("","_blank"); w.document.write("<!DOCTYPE html><html><head><meta charset=\'UTF-8\'><style>@page{margin:20mm}body{font-family:Arial;font-size:11pt;line-height:1.7;max-width:170mm;margin:0 auto}</style></head><body><pre style=\'white-space:pre-wrap;font-family:inherit\'>"+esc(text)+"</pre></body></html>"); w.document.close(); setTimeout(()=>{try{w.print();}catch(e){}},500); };
+
+// ── SHOW / HIDE ────────────────────────────────────────────
+function showLogin(){ $("loginScreen").style.display="flex"; $("appScreen").style.display="none"; }
+function showApp(){ $("loginScreen").style.display="none"; $("appScreen").style.display="block"; $("userEmail").textContent=currentUser.email; loadGroqKey(); }
 
 <!-- MODAL: EW NOTIZ -->
 <div class="modal-overlay" id="mEwNotiz" onclick="if(event.target===this)closeModal('mEwNotiz')">
