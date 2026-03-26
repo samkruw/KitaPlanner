@@ -36,6 +36,7 @@ let nachrichten=[], dienstplaene=[], warteliste=[], ferien=[];
 let dokumente=[], mitarbeiter=[], essensplaene=[], vertraege=[];
 let beobachtungen=[], tagesstrukturen=[];
 let einkaufslisten=[], unfaelle=[], kesb=[];
+let medikamente=[], checklisten=[], tagesnotizen=[];
 let unsubs = [];
 
 const DEFAULT_TARIFE = [
@@ -88,6 +89,9 @@ async function subscribeAll() {
     onSnapshot(collection(db,"kunden",uid,"einkaufslisten"),   snap=>{ einkaufslisten=snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }),
     onSnapshot(collection(db,"kunden",uid,"unfaelle"),         snap=>{ unfaelle=snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }),
     onSnapshot(collection(db,"kunden",uid,"kesb"),             snap=>{ kesb=snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }),
+    onSnapshot(collection(db,"kunden",uid,"medikamente"),      snap=>{ medikamente=snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }),
+    onSnapshot(collection(db,"kunden",uid,"checklisten"),      snap=>{ checklisten=snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }),
+    onSnapshot(collection(db,"kunden",uid,"tagesnotizen"),     snap=>{ tagesnotizen=snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }),
     onSnapshot(collection(db,"kunden",uid,"tarife"), async snap=>{
       if(snap.empty){ for(const t of DEFAULT_TARIFE) await save("tarife",t.id,t); }
       else { tarife = snap.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }
@@ -96,8 +100,11 @@ async function subscribeAll() {
 }
 
 async function save(col, id, data) {
-  try { await setDoc(doc(db,"kunden",currentUser.uid,col,id||col.slice(0,-1)+"_"+Date.now()),data); return true; }
-  catch(e){ alert("Fehler: "+e.message); return false; }
+  try {
+    await setDoc(doc(db,"kunden",currentUser.uid,col,id||col.slice(0,-1)+"_"+Date.now()),data);
+    if(typeof toast==="function") toast("✅ Gespeichert");
+    return true;
+  } catch(e){ alert("Fehler: "+e.message); return false; }
 }
 async function del(col, id) {
   try { await deleteDoc(doc(db,"kunden",currentUser.uid,col,id)); }
@@ -194,7 +201,7 @@ const KITA_COLORS = {
 
 // ── TABS ──────────────────────────────────────────────────
 let activeTab = "dashboard";
-window._setTab = t => { activeTab=t; renderAll(); };
+window._setTab = t => { if(activeTab===t&&document.getElementById('tabContent')?.children.length){renderSidebar();renderTopbar();return;} activeTab=t; renderAll(); };
 window.closeModal = id => $(id)?.classList.remove("open");
 
 // ── RENDER ENGINE ─────────────────────────────────────────
@@ -213,75 +220,100 @@ function renderAll() {
     essensplan:renderEssensplan, notfallkontakte:renderNotfallkontakte,
     eingewoehnung:renderEingewoehnung, vertraege:renderVertraege,
     beobachtungen:renderBeobachtungen, tagesstruktur:renderTagesstruktur,
-    ki:renderKiAssistent, einkaufsliste:renderEinkaufsliste, unfallprotokoll:renderUnfallprotokoll, kesb:renderKesb,
+    ki:renderKiAssistent, export:renderExport, medikamente:renderMedikamente, checkliste:renderCheckliste, einkaufsliste:renderEinkaufsliste, unfallprotokoll:renderUnfallprotokoll, kesb:renderKesb,
   };
   if(c && map[activeTab]) c.innerHTML = map[activeTab]();
 }
 
+
+// ── NAVIGATION DATA ───────────────────────────────────────
+const NAV_ITEMS = {
+  dashboard:        {icon:"🏠", label:"Dashboard"},
+  // Kinder & Familie
+  belegung:         {icon:"👶", label:"Belegung & Warteliste"},
+  anwesenheit:      {icon:"✅", label:"Anwesenheit"},
+  beobachtungen:    {icon:"📋", label:"Entwicklung & Förderung"},
+  eingewoehnung:    {icon:"📖", label:"Eingewöhnung"},
+  notfallkontakte:  {icon:"🚨", label:"Notfall & Allergien"},
+  vertraege:        {icon:"📄", label:"Verträge & Dokumente"},
+  // Personal
+  mitarbeiter:      {icon:"👤", label:"Mitarbeiter"},
+  dienstplan:       {icon:"📅", label:"Dienstplan & Ferien"},
+  // Verpflegung
+  essensplan:       {icon:"🍽️", label:"Essensplan"},
+  einkaufsliste:    {icon:"🛒", label:"Einkaufsliste"},
+  // Finanzen
+  rechnungen:       {icon:"🧾", label:"Rechnungen & Mahnwesen"},
+  subv:             {icon:"🏛️", label:"Subventionen"},
+  jahresabschluss:  {icon:"📊", label:"Jahresabschluss"},
+  rechner:          {icon:"🔢", label:"Beitragsrechner"},
+  // Kommunikation
+  kommunikation:    {icon:"💬", label:"Elternkommunikation"},
+  // Protokolle
+  unfallprotokoll:  {icon:"⚠️", label:"Unfallprotokoll"},
+  medikamente:      {icon:"💊", label:"Medikamente"},
+  kesb:             {icon:"⚖️", label:"KESB / Behörden"},
+  checkliste:       {icon:"☑️", label:"Aufnahme-Checkliste"},
+  // System
+  export:           {icon:"⬇️", label:"Export & Backup"},
+  ki:               {icon:"⚡", label:"KI-Einstellungen"},
+};
+const NAV_GROUPS = [
+  {id:"top",        label:"",              icon:"",   items:["dashboard"]},
+  {id:"kinder",     label:"Kinder & Familie", icon:"👶", items:["belegung","anwesenheit","beobachtungen","eingewoehnung","notfallkontakte","vertraege"]},
+  {id:"personal",   label:"Personal",      icon:"👤", items:["mitarbeiter","dienstplan"]},
+  {id:"verpflegung",label:"Verpflegung",   icon:"🍽️", items:["essensplan","einkaufsliste"]},
+  {id:"finanzen",   label:"Finanzen",      icon:"💰", items:["rechnungen","subv","jahresabschluss","rechner"]},
+  {id:"komm",       label:"Kommunikation", icon:"💬", items:["kommunikation"]},
+  {id:"protokoll",  label:"Protokolle & Recht", icon:"📋", items:["unfallprotokoll","medikamente","kesb","checkliste"]},
+  {id:"system",     label:"System",        icon:"⚙️", items:["export","ki"]},
+];
+if(!window._navOpen) window._navOpen = {top:true, kinder:true};
+
 function renderSidebar() {
   const nav=$("sidebarNav"); if(!nav)return;
   const ueberfaellig=rechnungen.filter(r=>r.status==="offen"&&r.faellig&&r.faellig<new Date().toISOString().slice(0,10)).length;
-  const groups=[
-    {label:"Übersicht",items:[
-      {id:"dashboard",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V5a1 1 0 00-1-1H3zm0 8a1 1 0 00-1 1v2a1 1 0 001 1h4a1 1 0 001-1v-2a1 1 0 00-1-1H3zm8-8a1 1 0 00-1 1v2a1 1 0 001 1h4a1 1 0 001-1V5a1 1 0 00-1-1h-4zm0 6a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1v-4a1 1 0 00-1-1h-4z"/></svg>`,label:"Dashboard"},
-    ]},
-    {label:"Kinder & Familie",items:[
-      {id:"belegung",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/></svg>`,label:"Belegungsliste"},
-      {id:"warteliste",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>`,label:"Warteliste",badge:warteliste.length||0},
-      {id:"anwesenheit",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>`,label:"Anwesenheit"},
-      {id:"anwesenheitStats",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg>`,label:"Statistik"},
-      {id:"notfallkontakte",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/></svg>`,label:"Notfallkontakte"},
-      {id:"eingewoehnung",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/></svg>`,label:"Eingewöhnung"},
-      {id:"beobachtungen",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>`,label:"Entwicklungsberichte"},
-      {id:"tagesstruktur",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>`,label:"Tagesstruktur"},
-      {id:"vertraege",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>`,label:"Verträge"},
-      {id:"dokumente",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>`,label:"Dokumente"},
-    ]},
-    {label:"Personal",items:[
-      {id:"mitarbeiter",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>`,label:"Mitarbeiter"},
-      {id:"dienstplan",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"/></svg>`,label:"Dienstplan"},
-      {id:"ferien",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 5a3 3 0 015-2.236A3 3 0 0114.83 6H16a2 2 0 110 4h-5V9a1 1 0 10-2 0v1H4a2 2 0 110-4h1.17C5.06 5.687 5 5.35 5 5zm4 1V5a1 1 0 10-1 1h1zm3 0a1 1 0 10-1-1v1h1z" clip-rule="evenodd"/><path d="M9 11H3v5a2 2 0 002 2h4v-7zM11 18h4a2 2 0 002-2v-5h-6v7z"/></svg>`,label:"Ferienplan"},
-    ]},
-    {label:"Verpflegung",items:[
-      {id:"essensplan",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>`,label:"Essensplan"},
-      {id:"einkaufsliste",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>`,label:"Einkaufsliste"},
-    ]},
-    {label:"Finanzen",items:[
-      {id:"rechnungen",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/></svg>`,label:"Rechnungen"},
-      {id:"mahnwesen",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>`,label:"Mahnwesen",badge:ueberfaellig||0},
-      {id:"subv",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"/><path fill-rule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clip-rule="evenodd"/></svg>`,label:"Subventionen"},
-      {id:"rechner",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm1 2a1 1 0 000 2h6a1 1 0 100-2H7zm6 7a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1zm-3 3a1 1 0 100 2h.01a1 1 0 100-2H10zm-4 1a1 1 0 011-1h.01a1 1 0 110 2H7a1 1 0 01-1-1zm1-4a1 1 0 100 2h.01a1 1 0 100-2H7zm2 1a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1zm4-4a1 1 0 100 2h.01a1 1 0 100-2H13zM9 9a1 1 0 011-1h.01a1 1 0 110 2H10A1 1 0 019 9zm-4 0a1 1 0 011-1h.01a1 1 0 110 2H6a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>`,label:"Beitragsrechner"},
-      {id:"jahresabschluss",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11 4a1 1 0 10-2 0v4a1 1 0 102 0V7zm-3 1a1 1 0 10-2 0v3a1 1 0 102 0V8zM8 9a1 1 0 00-2 0v2a1 1 0 102 0V9z" clip-rule="evenodd"/></svg>`,label:"Jahresabschluss"},
-    ]},
-    {label:"Kommunikation",items:[
-      {id:"kommunikation",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z"/><path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z"/></svg>`,label:"Kommunikation"},
-    ]},
-    {label:"Protokolle & Recht",items:[
-      {id:"unfallprotokoll",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>`,label:"Unfallprotokoll"},
-      {id:"kesb",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/></svg>`,label:"KESB / Behörden"},
-    ]},
-    {label:"🤖 KI-Assistent",items:[
-      {id:"ki",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/></svg>`,label:"KI-Assistent"},
-    ]},
-    {label:"Planung",items:[
-      {id:"forecast",icon:`<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11 4a1 1 0 10-2 0v4a1 1 0 102 0V7zm-3 1a1 1 0 10-2 0v3a1 1 0 102 0V8zM8 9a1 1 0 00-2 0v2a1 1 0 102 0V9z" clip-rule="evenodd"/></svg>`,label:"Forecast"},
-    ]},
-  ];
+  const badges={warteliste:warteliste.length||0, mahnwesen:ueberfaellig||0};
 
-  nav.innerHTML = groups.map(g=>`
-    <div class="nav-group">
-      <div class="nav-group-label">${g.label}</div>
-      ${g.items.map(item=>`
-        <button class="nav-item${activeTab===item.id?" active":""}" onclick="_setTab('${item.id}')">
-          <span class="nav-icon">${item.icon}</span>
+  nav.innerHTML = NAV_GROUPS.map(g=>{
+    if(g.id==="top"){
+      // Dashboard always visible, no group header
+      return g.items.map(id=>{
+        const item=NAV_ITEMS[id]; if(!item)return"";
+        return `<button class="nav-item${activeTab===id?" active":""}" onclick="_setTab('${id}')">
+          <span class="nav-icon-emoji">${item.icon}</span>
           <span class="nav-label">${item.label}</span>
-          ${item.badge?`<span class="nav-badge">${item.badge}</span>`:""}
-        </button>`).join("")}
-    </div>`).join("");
+          ${badges[id]?`<span class="nav-badge">${badges[id]}</span>`:""}
+        </button>`;
+      }).join("");
+    }
+    const isOpen = window._navOpen[g.id] !== false;
+    const hasActive = g.items.includes(activeTab);
+    const effectiveOpen = isOpen || hasActive;
+    const groupBadge = g.items.reduce((s,id)=>s+(badges[id]||0),0);
+    return `
+    <div class="nav-group-wrap">
+      <button class="nav-group-btn${hasActive?" has-active":""}" onclick="window._navOpen['${g.id}']=!window._navOpen['${g.id}'];renderSidebar()">
+        <span class="nav-group-icon">${g.icon}</span>
+        <span class="nav-group-label">${g.label}</span>
+        ${groupBadge&&!effectiveOpen?`<span class="nav-badge">${groupBadge}</span>`:""}
+        <span class="nav-group-arrow">${effectiveOpen?"▾":"▸"}</span>
+      </button>
+      ${effectiveOpen?`<div class="nav-sub">
+        ${g.items.map(id=>{
+          const item=NAV_ITEMS[id]; if(!item)return"";
+          return `<button class="nav-item nav-sub-item${activeTab===id?" active":""}" onclick="_setTab('${id}')">
+            <span class="nav-icon-emoji">${item.icon}</span>
+            <span class="nav-label">${item.label}</span>
+            ${badges[id]?`<span class="nav-badge">${badges[id]}</span>`:""}
+          </button>`;
+        }).join("")}
+      </div>`:""}
+    </div>`;
+  }).join("");
 
-  // update title
-  const allItems = groups.flatMap(g=>g.items);
-  const cur = allItems.find(i=>i.id===activeTab);
+  // Update topbar title
+  const cur=NAV_ITEMS[activeTab];
   const tEl=$("topbarTitle");
   if(tEl&&cur) tEl.textContent=cur.label;
 }
@@ -297,7 +329,30 @@ function renderTopbar() {
 }
 
 // ── BELEGUNGSLISTE ────────────────────────────────────────
+// ── SUB-TAB STATE ─────────────────────────────────────────
+let _subTab = {};
+window._setSubTab = (group, tab) => { _subTab[group]=tab; renderAll(); };
+function subTabs(group, tabs, activeDefault) {
+  const cur = _subTab[group] || activeDefault || tabs[0].id;
+  return '<div class="sub-tabs">'
+    + tabs.map(t=>`<button class="sub-tab${cur===t.id?" active":""}" onclick="_setSubTab('${group}','${t.id}')">${t.icon||""} ${t.label}</button>`).join("")
+    + '</div>';
+}
+function subActive(group, def) { return _subTab[group] || def; }
+
+
 function renderBelegung() {
+  const sub = subActive("belegung","kinder");
+  if(sub==="warteliste") return renderWarteliste();
+  if(sub==="tagesstruktur") return renderTagesstruktur();
+  if(sub==="forecast") return renderForecast();
+  const tabs=[
+    {id:"kinder",label:"Belegung",icon:"👶"},
+    {id:"warteliste",label:"Warteliste",icon:"⏳",badge:warteliste.length||0},
+    {id:"tagesstruktur",label:"Tagesstruktur",icon:"⏰"},
+    {id:"forecast",label:"Forecast",icon:"🔮"},
+  ];
+
   const rows=kinder.map((k,i)=>{
     const t=tarifOf(k.tarif);
     return `<tr>
@@ -310,6 +365,7 @@ function renderBelegung() {
       <td class="cell-sub">${fmtDate(k.austritt)}</td>
       <td><div class="row-actions">
         <button class="act-btn" onclick="_openKindModal('${k.id}')">✏️</button>
+        <button class="act-btn" title="Willkommensbrief" onclick="_kiWillkommenInline('${k.id}','${k.name}')">📬</button>
         <button class="act-btn danger" onclick="_deleteKind('${k.id}')">🗑</button>
       </div></td>
     </tr>`;
@@ -328,6 +384,7 @@ function renderBelegung() {
     </tr>`).join("");
 
   return `
+  ${subTabs("belegung",tabs)}
   ${statsGrid([
     {icon:"👶",val:kinder.length,lbl:"Kinder"},
     {icon:"🟢",val:subvList().length,lbl:"Subventioniert",color:"green"},
@@ -351,6 +408,7 @@ function renderBelegung() {
     <table><thead><tr>${["Name","Preis/Tag","Beschreibung","Belegt",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
     <tbody>${tarifRows||emptyRow(5,"Keine Tarife.")}</tbody></table>
   </div>
+  ${kiPanelSimple("kiMonat","Monatsabschluss-Assistent","Monatsabschluss generieren","_kiMonatInline()")}
   <div class="tally">${kinder.length} Kinder</div>`;
 }
 
@@ -379,6 +437,13 @@ window._openTarifModal=id=>{
 
 // ── ANWESENHEIT ───────────────────────────────────────────
 function renderAnwesenheit() {
+  const sub = subActive("anwesenheit","heute");
+  if(sub==="statistik") return renderAnwesenheitStats();
+  const tabs=[
+    {id:"heute",label:"Heute erfassen",icon:"✅"},
+    {id:"statistik",label:"Statistik",icon:"📈"},
+  ];
+
   const today=new Date().toISOString().slice(0,10);
   const anwH=anwesenheiten.filter(a=>a.datum===today);
   const anw=anwH.filter(a=>a.status==="anwesend").length;
@@ -401,6 +466,8 @@ function renderAnwesenheit() {
     <td class="cell-sub">${a.bemerkung||"–"}</td>
     <td><button class="act-btn danger" onclick="_deleteAnwesenheit('${a.id}')">🗑</button></td></tr>`).join("");
   return `
+  ${subTabs("anwesenheit",tabs)}
+  ${kiPanelSimple("kiTagesrapport","Tagesrapport-Generator","Tagesrapport erstellen","_kiTagesrapportInline()")}
   ${statsGrid([
     {icon:"📅",val:new Date().toLocaleDateString("de-CH",{weekday:"short",day:"numeric",month:"short"}),lbl:"Heute",color:"primary"},
     {icon:"✅",val:anw,lbl:"Anwesend",color:"green"},
@@ -480,6 +547,13 @@ window._openAllergieBatch=()=>{
 // ── EINGEWÖHNUNG ──────────────────────────────────────────
 // ── ESSENSPLAN ────────────────────────────────────────────
 function renderEssensplan() {
+  const sub = subActive("essensplan","essensplan");
+  if(sub==="einkaufsliste") return renderEinkaufsliste();
+  const tabs=[
+    {id:"essensplan",label:"Essensplan",icon:"🍽️"},
+    {id:"einkaufsliste",label:"Einkaufsliste",icon:"🛒"},
+  ];
+
   const WDAYS=["Montag","Dienstag","Mittwoch","Donnerstag","Freitag"];
   const now=new Date();
   const startOfWeek=new Date(now); startOfWeek.setDate(now.getDate()-((now.getDay()||7)-1));
@@ -517,7 +591,9 @@ function renderEssensplan() {
     </div>`).join("");
 
   return `
-  <div style="display:grid;grid-template-columns:1fr 280px;gap:16px">
+  ${subTabs("essensplan",tabs)}
+  ${kiPanelEssen()}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">
     <div>
       <div class="table-card mb-4">
         <div class="table-header">
@@ -560,6 +636,15 @@ window._openEssenModal=(id,datum)=>{
 
 // ── VERTRÄGE ──────────────────────────────────────────────
 function renderVertraege() {
+  const sub = subActive("vertraege","vertraege");
+  if(sub==="dokumente") return renderDokumente();
+  if(sub==="checkliste") return renderCheckliste();
+  const tabs=[
+    {id:"vertraege",label:"Verträge",icon:"📄"},
+    {id:"dokumente",label:"Dokumente",icon:"📁"},
+    {id:"checkliste",label:"Aufnahme-Checkliste",icon:"☑️"},
+  ];
+
   const rows=vertraege.map((v,i)=>`
     <tr>
       <td><div class="cell-main">${v.kindName||"–"}</div></td>
@@ -575,6 +660,7 @@ function renderVertraege() {
       </div></td>
     </tr>`).join("");
   return `
+  ${subTabs("vertraege",tabs)}
   <div class="toolbar">
     <button class="btn-primary" onclick="_openVertragModal()">+ Vertrag erstellen</button>
   </div>
@@ -647,6 +733,17 @@ window._druckVertrag=id=>{
 
 // ── RECHNUNGEN ────────────────────────────────────────────
 function renderRechnungen() {
+  const sub = subActive("rechnungen","rechnungen");
+  if(sub==="mahnwesen") return renderMahnwesen();
+  if(sub==="jahresabschluss") return renderJahresabschluss();
+  if(sub==="rechner") return renderRechner();
+  const tabs=[
+    {id:"rechnungen",label:"Rechnungen",icon:"🧾"},
+    {id:"mahnwesen",label:"Mahnwesen",icon:"⚠️",badge:rechnungen.filter(r=>r.status==="offen"&&r.faellig&&r.faellig<new Date().toISOString().slice(0,10)).length||0},
+    {id:"jahresabschluss",label:"Jahresabschluss",icon:"📊"},
+    {id:"rechner",label:"Beitragsrechner",icon:"🔢"},
+  ];
+
   const offen=rechnungen.filter(r=>r.status==="offen");
   const bezahlt=rechnungen.filter(r=>r.status==="bezahlt");
   const rows=[...rechnungen].sort((a,b)=>b.datum?.localeCompare(a.datum||"")||0).map((r,i)=>`
@@ -666,6 +763,7 @@ function renderRechnungen() {
       </div></td>
     </tr>`).join("");
   return `
+  ${subTabs("rechnungen",tabs)}
   ${statsGrid([
     {icon:"🧾",val:rechnungen.length,lbl:"Total",color:"primary"},
     {icon:"⏳",val:offen.length,lbl:"Offen",color:"red",sub:"CHF "+Math.round(offen.reduce((s,r)=>s+(r.betrag||0),0)).toLocaleString("de-CH")},
@@ -748,7 +846,7 @@ function renderSubv() {
     {icon:"📊",val:"CHF "+Math.round((uSv+uPr)/1000*10)/10+"k",lbl:"Gesamtumsatz/Mt."},
   ])}
   <div class="table-card mb-4" style="padding:20px">
-    <div style="display:flex;align-items:center;gap:24px">
+    <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
       <svg width="120" height="120" viewBox="0 0 42 42">
         <circle cx="21" cy="21" r="15.9" fill="none" stroke="#e2e8f0" stroke-width="4"/>
         <circle cx="21" cy="21" r="15.9" fill="none" stroke="#16a34a" stroke-width="4"
@@ -768,7 +866,7 @@ function renderSubv() {
 
 // ── RECHNER ───────────────────────────────────────────────
 function renderRechner() {
-  return `<div class="table-card" style="max-width:560px;padding:24px">
+  return `<div class="table-card" style="padding:24px">
     <div class="table-title mb-4">Elternbeitragsrechner (Schweizer Modell)</div>
     <div class="form-grid">
       <div class="field"><label>Jahreseinkommen (CHF)</label><input id="bcE" type="number" placeholder="80000" class="field-input" oninput="calcB()"/></div>
@@ -820,6 +918,7 @@ function renderMahnwesen() {
       <td><div class="row-actions">
         <button class="btn-xs green" onclick="_toggleRech('${r.id}','offen')">✅ Bezahlt</button>
         <button class="btn-xs primary" onclick="_mahnungDruck('${r.id}')">📄 Mahnung</button>
+      </div>${kiPanelMahnung(r.id)}
       </div></td>
     </tr>`;}).join("");
   return `
@@ -869,7 +968,9 @@ function renderJahresabschluss() {
     {icon:"🧾",val:"CHF "+Math.round(mwst).toLocaleString("de-CH"),lbl:"MWST 8.1%"},
     {icon:"💰",val:"CHF "+Math.round(netto/1000*10)/10+"k",lbl:"Netto",color:"primary"},
   ])}
-  <div class="toolbar"><button class="btn-secondary" onclick="window.print()">🖨️ Drucken / PDF</button></div>
+  ${kiPanelSimple("kiFinInl","Finanzbericht generieren","Bericht erstellen","_kiFinInline()")}
+  ${kiPanelSimple("kiQual","Qualitätsbericht erstellen","Jahresbericht","_kiQualitaetsbericht()")}
+    <div class="toolbar"><button class="btn-secondary" onclick="window.print()">🖨️ Drucken / PDF</button></div>
   <div class="table-card">
     <table><thead><tr>${["Monat","Einnahmen","Ausstehend","Rechnungen","MWST 8.1%","Netto"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
     <tbody>${rows}</tbody>
@@ -921,11 +1022,21 @@ function renderKommunikation() {
   ])}
   <div class="toolbar">
     <button class="btn-primary" onclick="_openNachrichtModal()">+ Neuer Eintrag</button>
+  ${kiPanelBrief()}
+  ${kiPanelSimple("kiQualKomm","Beschwerdemanagement","Antwort formulieren","_kiBeschwerdeQuick()")}
+  ${kiPanelSimple("kiUmfrage","Elternumfrage erstellen","Umfrage als PDF","_kiElternumfrage()")}
     <button class="btn-secondary" onclick="_openNachrichtModal(null,null,'monatsbeitrag')">💰 Monatsbeitrag</button>
     <button class="btn-secondary" onclick="_openNachrichtModal(null,null,'event')">🎉 Event</button>
     <button class="btn-secondary" onclick="_openNachrichtModal(null,null,'termin')">📅 Termin</button>
   </div>
-  <div style="display:grid;grid-template-columns:1fr 300px;gap:16px">
+  ${kiPanel("brief","Elternbrief-Generator",
+    \`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="field"><label>Thema</label><select id="kiBriefThema" class="field-input"><option>Ferieninformation</option><option>Krankheitsregelung</option><option>Eingewöhnung</option><option>Monatsbeitrag</option><option>Anlass / Event</option><option>Allgemeine Information</option><option>Jahresabschluss</option></select></div>
+      <div class="field"><label>Ton</label><select id="kiBriefTon" class="field-input"><option>freundlich und professionell</option><option>warm und persönlich</option><option>sachlich und klar</option></select></div>
+    </div>
+    <div class="field" style="margin-top:6px"><label>Stichworte / Details</label><textarea id="kiBriefText" class="field-input" style="min-height:50px" placeholder="z.B. Sommerferien 14.–18. Juli, Kita geschlossen…"></textarea></div>\`,
+    "Brief generieren","_kiElternbriefInline()")}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">
     <div class="table-card">
       <div class="table-header"><span class="table-title">${erster.toLocaleDateString("de-CH",{month:"long",year:"numeric"})}</span></div>
       <div style="padding:12px 16px"><div class="kal-grid">${kalHdr}${kalCells}</div></div>
@@ -1042,6 +1153,13 @@ window._druckEssensplan = () => {
 
 // ── DIENSTPLAN ────────────────────────────────────────────
 function renderDienstplan() {
+  const sub = subActive("dienstplan","dienstplan");
+  if(sub==="ferien") return renderFerien();
+  const tabs=[
+    {id:"dienstplan",label:"Dienstplan",icon:"📅"},
+    {id:"ferien",label:"Ferienplan",icon:"🏖️"},
+  ];
+
   const now=new Date(),wd=["Mo","Di","Mi","Do","Fr"];
   const sow=new Date(now);sow.setDate(now.getDate()-((now.getDay()||7)-1));
   const days=wd.map((tag,i)=>{const d=new Date(sow);d.setDate(sow.getDate()+i);return{tag,date:d.toISOString().slice(0,10),lbl:d.toLocaleDateString("de-CH",{day:"numeric",month:"short"})};});
@@ -1065,6 +1183,7 @@ function renderDienstplan() {
       <button class="act-btn danger" onclick="_deleteDienst('${d.id}')">🗑</button>
     </div></td></tr>`).join("");
   return `
+  ${subTabs("dienstplan",tabs)}
   <div class="toolbar"><button class="btn-primary" onclick="_openDienstModal()">+ Eintrag</button></div>
   <div class="table-card mb-4"><div class="table-header"><span class="table-title">Aktuelle Woche</span></div>
   <div class="week-grid" style="padding:12px">${grid}</div></div>
@@ -1119,6 +1238,8 @@ function renderMitarbeiter() {
     {icon:"💼",val:mitarbeiter.filter(m=>m.status!=="aktiv").length,lbl:"Ehemalige"},
   ])}
   <div class="toolbar"><button class="btn-primary" onclick="_openMitarbModal()">+ Mitarbeiter</button><button class="btn-secondary" onclick="_setTab('dienstplan')">📅 Dienstplan</button></div>
+  ${kiPanelSimple("kiStellen","Stelleninserat schreiben","Inserat generieren","_kiStelleninserat()")}
+  ${kiPanelSimple("kiKonzept","Pädagogisches Konzept","Konzept generieren","_kiKonzept()")}
   <div class="ma-grid">${cards||`<div class="empty-state">Noch keine Mitarbeiter.</div>`}</div>`;
 }
 window._openMitarbModal=id=>{
@@ -1364,7 +1485,7 @@ function pill(txt,color){
 function statsGrid(items){
   return`<div class="stats-grid">${items.map(i=>`<div class="stat-card"><div class="sc-icon">${i.icon}</div><div class="sc-val${i.color?" "+i.color:""}">${i.val}</div><div class="sc-lbl">${i.lbl}</div>${i.sub?`<div class="sc-sub">${i.sub}</div>`:""}</div>`).join("")}</div>`;
 }
-function emptyRow(cols,txt){return`<tr><td colspan="${cols}" style="text-align:center;padding:40px;color:#94a3b8">${txt}</td></tr>`;}
+function emptyRow(cols,txt){return`<tr><td colspan="${cols}" style="text-align:center;padding:48px 20px;color:#94a3b8"><div style="font-size:32px;margin-bottom:10px">📭</div><div style="font-size:13px">${txt}</div></td></tr>`;}
 function openModal(id,titleId,title){$(titleId).textContent=title;$(id)?.classList.add("open");}
 function setFields(obj){for(const[k,v]of Object.entries(obj)){const el=$(k);if(!el)continue;if(el.type==="checkbox")el.checked=!!v;else el.value=v??"";}  }
 window.filterRows=(tbodyId,q)=>{const ql=q.toLowerCase();document.querySelectorAll(`#${tbodyId} tr`).forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(ql)?"":"none";});};
@@ -1421,6 +1542,7 @@ function renderEingewoehnung() {
   }).join("");
 
   return `
+  ${kiPanelSimple("kiEwInl","Eingewöhnungs-Abschlussbericht","Abschlussbericht","_kiEwAbschluss()")}
   <div class="section-intro">
     📖 <strong>Berliner Eingewöhnungsmodell</strong> — Standard für Schweizer Kitas.
     Begleite jedes Kind durch die 4 Eingewöhnungsphasen mit Notizen und Fortschrittsprotokoll.
@@ -1473,6 +1595,13 @@ const BEREICH_LABELS={motorik:"Motorik",sprache:"Sprache & Kommunikation",sozial
 const BEREICH_ICONS={motorik:"🏃",sprache:"💬",sozial:"🤝",kognitiv:"🧠",kreativitaet:"🎨"};
 
 function renderBeobachtungen() {
+  const sub = subActive("beobachtungen","beobachtungen");
+  if(sub==="eingewoehnung") return renderEingewoehnung();
+  const tabs=[
+    {id:"beobachtungen",label:"Entwicklungsberichte",icon:"📋"},
+    {id:"eingewoehnung",label:"Eingewöhnung",icon:"📖"},
+  ];
+
   const kindFilter=window._beobKindFilter||"alle";
   const gefiltert=kindFilter==="alle"?beobachtungen:beobachtungen.filter(b=>b.kindId===kindFilter);
   const sorted=[...gefiltert].sort((a,b)=>b.datum?.localeCompare(a.datum||"")||0);
@@ -1525,6 +1654,7 @@ function renderBeobachtungen() {
   </tr>`).join("");
 
   return `
+  ${subTabs("beobachtungen",tabs)}
   ${statsGrid([
     {icon:"📋",val:beobachtungen.length,lbl:"Einträge total",color:"primary"},
     {icon:"👶",val:[...new Set(beobachtungen.map(b=>b.kindId))].length,lbl:"Kinder erfasst",color:"green"},
@@ -1535,6 +1665,8 @@ function renderBeobachtungen() {
     <button class="btn-primary" onclick="_openBeobModal()">+ Neue Beobachtung</button>
     <select class="search" style="flex:unset;min-width:180px" onchange="window._beobKindFilter=this.value;renderAll()">${kindOptions}</select>
   </div>
+  ${kiPanelSimple("kiElternGesp","Elterngespräch-Vorbereitung","Leitfaden erstellen","_kiElternGespraechInline()")}
+  ${kiPanelSimple("kiFoerder","Förderziele formulieren","Ziele erstellen","_kiFoerderzieleInline()")}
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:16px">
     ${kindOverview||`<div class="empty-state">Noch keine Kinder.</div>`}
   </div>
@@ -1888,7 +2020,7 @@ function renderUnfallprotokoll() {
         <button class="act-btn" onclick="_openUnfallModal('${u.id}')">✏️</button>
         <button class="act-btn" onclick="_druckUnfall('${u.id}')">🖨️</button>
         <button class="act-btn danger" onclick="_deleteUnfall('${u.id}')">🗑</button>
-      </div></td>
+      </div>${kiPanelUnfall(u.id)}</td>
     </tr>`).join("");
   return `
   <div class="section-intro">⚠️ <strong>Unfallprotokoll</strong> — Pflicht gemäss Art. 68 KiBeG. Alle Verletzungen und Vorfälle müssen dokumentiert werden. SUVA-relevant bei Unfällen.</div>
@@ -1991,6 +2123,9 @@ function renderKesb() {
   <div class="toolbar">
     <button class="btn-primary" onclick="_openKesbModal()">+ Eintrag erfassen</button>
   </div>
+  ${kiPanelSimple("kiKESBInl","KESB-Meldung","KI-Meldung","_kiKESBMeldung()")}
+  <div style="display:none">
+  </div>
   <div class="table-card">
     <table><thead><tr>${["Datum","Kind","Typ","Behörde","Beschreibung","Status",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
     <tbody>${rows||emptyRow(7,"Keine KESB-Einträge. Alle Kindesschutzmeldungen und Behördenkontakte hier erfassen.")}</tbody></table>
@@ -2066,7 +2201,7 @@ function renderDashboard() {
   const C=2*Math.PI*15.9, anwD=(anwesend/total)*C, offset=C*0.25;
 
   return `
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px">
     ${[
       {icon:"👶",val:kinder.length,lbl:"Kinder total",sub:freiesPlaetze+" Plätze frei",color:"primary"},
       {icon:"✅",val:anwesend,lbl:"Anwesend heute",sub:abwesend+" abwesend · "+nichtErfasst+" offen",color:"green"},
@@ -2080,7 +2215,7 @@ function renderDashboard() {
     </div>`).join("")}
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:14px">
 
     
     <div class="table-card" style="padding:20px">
@@ -2153,19 +2288,46 @@ function renderDashboard() {
           <div><div style="font-size:12px;font-weight:600">${warteEintritt.length} Warteliste-Eintritte in 60 Tagen</div>
           <div class="cell-sub">${warteEintritt.map(w=>w.name).slice(0,2).join(", ")||"Keine"}</div></div>
         </div>
+        ${getAbsenzAlerts()}
         ${ueberfaellig.length?`<div class="dash-info-row" style="background:var(--red-light);border-radius:6px;padding:6px 8px;margin:0 -8px">
           <span class="dash-info-icon">🚨</span>
           <div><div style="font-size:12px;font-weight:600;color:var(--red)">${ueberfaellig.length} überfällige Rechnung${ueberfaellig.length>1?"en":""}</div>
           <div class="cell-sub">CHF ${Math.round(ueberfaellig.reduce((s,r)=>s+(r.betrag||0),0)).toLocaleString("de-CH")}</div></div>
           <button class="btn-xs red" style="margin-left:auto" onclick="_setTab('mahnwesen')">→</button>
         </div>`:""}
+        ${(()=>{
+          const today=new Date().toISOString().slice(0,10);
+          const in30=new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+          const ablauf=vertraege.filter(v=>v.bis&&v.bis>=today&&v.bis<=in30&&v.status==="aktiv");
+          return ablauf.length?`<div class="dash-info-row" style="background:var(--amber-light);border-radius:6px;padding:6px 8px;margin:0 -8px">
+            <span class="dash-info-icon">📋</span>
+            <div><div style="font-size:12px;font-weight:600;color:var(--amber)">${ablauf.length} Vertrag${ablauf.length>1?"\u00e4ge":""} läuft bald ab</div>
+            <div class="cell-sub">${ablauf.map(v=>v.kindName).join(", ")}</div></div>
+            <button class="btn-xs slate" style="margin-left:auto" onclick="_setTab('vertraege')">→</button>
+          </div>`:"";
+        })()}
+        ${(()=>{
+          const heute=new Date();
+          const bald=kinder.filter(k=>{
+            if(!k.geb)return false;
+            const g=new Date(k.geb);
+            const next=new Date(heute.getFullYear(),g.getMonth(),g.getDate());
+            if(next<heute)next.setFullYear(heute.getFullYear()+1);
+            return(next-heute)/86400000<=3;
+          });
+          return bald.length?`<div class="dash-info-row" style="background:var(--green-light);border-radius:6px;padding:6px 8px;margin:0 -8px">
+            <span class="dash-info-icon">🎂</span>
+            <div><div style="font-size:12px;font-weight:600;color:var(--green)">Geburtstag${bald.length>1?"e":""} in 3 Tagen</div>
+            <div class="cell-sub">${bald.map(k=>k.name).join(", ")}</div></div>
+          </div>`:"";
+        })()}
       </div>
     </div>
 
   </div>
 
   
-  <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
 
     
     <div class="table-card">
@@ -2199,6 +2361,7 @@ function renderDashboard() {
           {label:"Anwesenheit heute",    icon:"✅", action:"_setTab('anwesenheit')", color:"green"},
           {label:"+ Vorfall erfassen",   icon:"⚠️", action:"_openUnfallModal()",     color:"red"},
           {label:"Kita-Einstellungen",   icon:"⚙️", action:"_openKitaSettings()",   color:"slate"},
+          {label:"Wochenrückblick",       icon:"📝", action:"_kiWochenrueckblickInline()", color:"primary"},
         ].map(a=>`<button class="dash-quick-btn" onclick="${a.action}">
           <span style="font-size:16px">${a.icon}</span>
           <span style="font-size:12.5px;font-weight:600">${a.label}</span>
@@ -2303,6 +2466,7 @@ function renderAnwesenheitStats() {
     <table><thead><tr>${["Kind","Anwesend","Abwesend","Soll-Tage","Quote","14 Tage Verlauf"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
     <tbody>${rows||emptyRow(6,"Keine Anwesenheitsdaten.")}</tbody></table>
   </div>
+  ${kiPanelSimple("kiAnwInl","Anwesenheits-Analyse","Analyse starten","_kiAnwInline()")}
   ${topAbwesend.some(k=>k.abw>0)?`
   <div class="table-card" style="padding:20px">
     <div class="table-title" style="margin-bottom:12px">⚠️ Höchste Fehlzeiten (letzte 30 Tage)</div>
@@ -2356,270 +2520,873 @@ window._druckAnwesenheitStats=()=>{
 };
 
 // ── GROQ KI-ASSISTENT ─────────────────────────────────────
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+// ── KI PROVIDER ENGINE ────────────────────────────────────
+const AI_PROVIDERS = {
+  groq: {
+    name:"Groq (kostenlos ⚡)",
+    url:"https://api.groq.com/openai/v1/chat/completions",
+    models:["llama-3.3-70b-versatile","llama-3.1-8b-instant","mixtral-8x7b-32768","gemma2-9b-it"],
+    keyLabel:"Groq API Key (gsk_…)",
+    keyUrl:"https://console.groq.com/keys",
+    free:true,
+  },
+  openai: {
+    name:"OpenAI (GPT)",
+    url:"https://api.openai.com/v1/chat/completions",
+    models:["gpt-4o-mini","gpt-4o","gpt-4-turbo","gpt-3.5-turbo"],
+    keyLabel:"OpenAI API Key (sk-…)",
+    keyUrl:"https://platform.openai.com/api-keys",
+    free:false,
+  },
+  openrouter: {
+    name:"OpenRouter (viele Modelle)",
+    url:"https://openrouter.ai/api/v1/chat/completions",
+    models:["meta-llama/llama-3.3-70b-instruct:free","google/gemma-3-27b-it:free","mistralai/mistral-7b-instruct:free","anthropic/claude-3-haiku","openai/gpt-4o-mini"],
+    keyLabel:"OpenRouter Key (sk-or-…)",
+    keyUrl:"https://openrouter.ai/keys",
+    free:true,
+    extraHeaders:{"HTTP-Referer":"https://kitaplaner.ch","X-Title":"KitaPlaner"},
+  },
+  ollama: {
+    name:"Ollama (lokal, kein Key)",
+    url:"http://localhost:11434/v1/chat/completions",
+    models:["llama3.2","llama3.1","mistral","gemma2","phi3"],
+    keyLabel:"Kein Key nötig",
+    keyUrl:"https://ollama.ai",
+    free:true, noKey:true,
+  },
+};
 
-let _groqKey = "";
-function getGroqKey() { return _groqKey; }
-async function setGroqKey(k) {
-  _groqKey = k;
+let _aiSettings = {provider:"groq", model:"llama-3.3-70b-versatile", key:""};
+const getAiProvider = () => AI_PROVIDERS[_aiSettings.provider]||AI_PROVIDERS.groq;
+const getAiKey      = () => _aiSettings.key;
+const getAiModel    = () => _aiSettings.model;
+function getGroqKey() { return _aiSettings.key; }
+
+async function saveAiSettings() {
   if(!currentUser) return;
-  try { await setDoc(doc(db,"kunden",currentUser.uid,"settings","groq"),{key:k}); } catch(e){}
+  try { await setDoc(doc(db,"kunden",currentUser.uid,"settings","ai"),{..._aiSettings}); }
+  catch(e){ console.error("saveAiSettings error:",e); }
+}
+
+// Debounced save — waits 800ms after last keystroke before saving
+let _saveTimer = null;
+function saveAiSettingsDebounced() {
+  if(_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(()=>saveAiSettings(), 800);
 }
 async function loadGroqKey() {
   if(!currentUser) return;
   try {
-    const snap = await getDoc(doc(db,"kunden",currentUser.uid,"settings","groq"));
-    if(snap.exists()) { _groqKey = snap.data().key||""; renderAll(); }
-  } catch(e){}
+    const snap = await getDoc(doc(db,"kunden",currentUser.uid,"settings","ai"));
+    if(snap.exists()){
+      Object.assign(_aiSettings, snap.data());
+      // Update input directly if visible — don't renderAll() which would reset mid-type
+      if($("aiKeyInput") && document.activeElement !== $("aiKeyInput")){
+        $("aiKeyInput").value = _aiSettings.key||"";
+      }
+      return;
+    }
+    // Migrate old groq key
+    const old = await getDoc(doc(db,"kunden",currentUser.uid,"settings","groq"));
+    if(old.exists()&&old.data().key){
+      _aiSettings.key = old.data().key;
+      saveAiSettings();
+    }
+  } catch(e){ console.error("loadGroqKey:",e); }
 }
 
-window._updateGroqKey = (v) => { _groqKey = v; setGroqKey(v); };
+window._updateGroqKey    = (v) => { _aiSettings.key=v; saveAiSettingsDebounced(); };
+window._updateAiProvider = (v) => {
+  _aiSettings.provider=v;
+  const p=AI_PROVIDERS[v];
+  _aiSettings.model=p.models[0];
+  if($("aiModelSel")){ $("aiModelSel").innerHTML=p.models.map(m=>`<option value="${m}">${m}</option>`).join(""); $("aiModelSel").value=_aiSettings.model; }
+  if($("aiKeyInput")){ $("aiKeyInput").placeholder=p.keyLabel; $("aiKeyInput").disabled=!!p.noKey; $("aiKeyInput").value=p.noKey?"(lokal, kein Key nötig)":_aiSettings.key; }
+  if($("aiKeyLink")) $("aiKeyLink").href=p.keyUrl;
+  if($("aiKeyRow")) $("aiKeyRow").style.display=p.noKey?"none":"flex";
+  saveAiSettings();
+};
+window._updateAiModel = (v) => { _aiSettings.model=v; saveAiSettings(); };
+window._updateAiKey   = (v) => { _aiSettings.key=v; saveAiSettingsDebounced(); };
+window._saveAiKeyNow  = async (v) => {
+  if(!v) return;
+  _aiSettings.key = v;
+  await saveAiSettings();
+  // Show saved hint
+  const hint = $("aiKeySavedHint");
+  if(hint){ hint.style.display="inline"; setTimeout(()=>{ hint.style.display="none"; },2000); }
+};
 
-async function groqCall(systemPrompt, userPrompt, onChunk) {
-  const key = getGroqKey();
-  if(!key){ alert("Bitte zuerst den Groq API Key eingeben (oben rechts im KI-Assistenten)."); return null; }
+async function aiCall(systemPrompt, userPrompt, onChunk) {
+  const prov=getAiProvider(), key=getAiKey(), model=getAiModel();
+  if(!prov.noKey&&!key){ alert(`Bitte zuerst den ${prov.name} API Key eingeben.`); return null; }
   try {
-    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method:"POST",
-      headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages:[{role:"system",content:systemPrompt},{role:"user",content:userPrompt}],
-        temperature:0.7,
-        max_tokens:1500,
-        stream: !!onChunk
-      })
+    const headers={"Content-Type":"application/json",...(prov.extraHeaders||{})};
+    if(!prov.noKey) headers["Authorization"]="Bearer "+key;
+    const resp=await fetch(prov.url,{
+      method:"POST", headers,
+      body:JSON.stringify({model,messages:[{role:"system",content:systemPrompt},{role:"user",content:userPrompt}],temperature:0.7,max_tokens:1500,stream:!!onChunk})
     });
-    if(!resp.ok){ const e=await resp.json(); alert("Groq Fehler: "+(e.error?.message||resp.status)); return null; }
+    if(!resp.ok){ let msg=resp.status; try{const e=await resp.json();msg=e.error?.message||msg;}catch(e){} alert(`${prov.name} Fehler: ${msg}`); return null; }
     if(onChunk){
-      const reader=resp.body.getReader(), dec=new TextDecoder(); let full="";
+      const reader=resp.body.getReader(),dec=new TextDecoder(); let full="";
       while(true){
         const {done,value}=await reader.read(); if(done)break;
         const lines=dec.decode(value).split("\n").filter(l=>l.startsWith("data:"));
         for(const line of lines){
           const raw=line.slice(5).trim(); if(raw==="[DONE]")continue;
-          try{ const d=JSON.parse(raw); const t=d.choices?.[0]?.delta?.content||""; if(t){full+=t;onChunk(full);} }catch(e){}
+          try{const d=JSON.parse(raw);const t=d.choices?.[0]?.delta?.content||"";if(t){full+=t;onChunk(full);}}catch(e){}
         }
       }
       return full;
-    } else {
-      const d=await resp.json();
-      return d.choices?.[0]?.message?.content||"";
-    }
+    } else { const d=await resp.json(); return d.choices?.[0]?.message?.content||""; }
   } catch(e){ alert("Netzwerkfehler: "+e.message); return null; }
 }
+const groqCall = aiCall;
 
-function renderKiAssistent() {
-  const key = getGroqKey();
-  const allergien = [...new Set(dokumente.filter(d=>d.typ==="allergie").map(d=>d.titel))];
-  const monat = new Date().toLocaleDateString("de-CH",{month:"long"});
-
+// ── KI PANEL HELPER ───────────────────────────────────────
+function kiPanel(id, title, fields, btnLabel, btnFn, extraClass) {
+  if(!getAiKey()&&!getAiProvider().noKey) return `
+    <div class="ki-inline-panel ki-locked">
+      <span style="font-size:16px">⚡</span>
+      <span class="cell-sub">KI verfügbar nach <button class="btn-xs slate" onclick="_setTab('ki')">API Key einrichten →</button></span>
+    </div>`;
   return `
-  <div class="ki-header">
-    <div>
-      <div class="ki-title">⚡ KI-Assistent</div>
-      <div class="cell-sub">Powered by Groq — Llama 3.3 70B · Schnell, kostenlos, privat</div>
+  <div class="ki-inline-panel${extraClass?" "+extraClass:""}">
+    <div class="ki-inline-title">⚡ ${title}</div>
+    ${fields}
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <button class="ki-btn-sm" onclick="${btnFn}">✨ ${btnLabel}</button>
+      <span id="${id}Spin" style="display:none;font-size:11px;color:var(--primary)">⚡ Generiere…</span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <input id="kiApiKey" type="password" class="search" style="width:240px;flex:unset"
-        placeholder="Groq API Key (gsk_…)" value="${getGroqKey()}"
-        oninput="_updateGroqKey(this.value)"/>
-      <a href="https://console.groq.com/keys" target="_blank" class="btn-xs primary">Key holen →</a>
-    </div>
-  </div>
-  ${!key?`<div class="section-intro" style="background:#fef3c7;border-color:#fcd34d;color:#92400e">
-    ⚠️ Bitte Groq API Key eingeben um den KI-Assistenten zu nutzen.
-    Kostenlos unter <a href="https://console.groq.com/keys" target="_blank" style="color:#92400e;font-weight:700">console.groq.com</a>
-  </div>`:""}
-
-  <div class="ki-grid">
-    <div class="ki-card">
-      <div class="ki-card-icon">📄</div>
-      <div class="ki-card-title">Elternbrief-Generator</div>
-      <div class="ki-card-sub">Aus Stichworten einen professionellen Brief formulieren</div>
-      <div class="ki-fields">
-        <div class="field"><label>Thema / Anlass</label>
-          <select id="kiBetreff" class="field-input">
-            <option value="Ferieninformation">🏖️ Ferieninformation</option>
-            <option value="Krankheitsregelung">🤧 Krankheitsregelung</option>
-            <option value="Eingewöhnung">👶 Eingewöhnung</option>
-            <option value="Monatsbeitrag">💰 Monatsbeitrag</option>
-            <option value="Anlass / Event">🎉 Anlass / Event</option>
-            <option value="Allgemeine Information">ℹ️ Allgemeine Info</option>
-            <option value="Jahresabschluss">📅 Jahresabschluss</option>
-          </select>
-        </div>
-        <div class="field"><label>Stichworte / Details</label>
-          <textarea id="kiStichworte" style="min-height:60px" placeholder="z.B. Sommerferien 14.–18. Juli, Kita geschlossen, Notfallbetreuung möglich, Anmeldung bis 30. Juni…" class="field-input"></textarea>
-        </div>
-        <div class="field"><label>Ton</label>
-          <select id="kiTon" class="field-input">
-            <option value="freundlich und professionell">Freundlich & professionell</option>
-            <option value="warm und persönlich">Warm & persönlich</option>
-            <option value="sachlich und klar">Sachlich & klar</option>
-          </select>
-        </div>
-      </div>
-      <button class="ki-btn" onclick="_kiElternbrief()">✨ Brief generieren</button>
-      <div class="ki-result" id="kiBriefResult"></div>
-    </div>
-    <div class="ki-card">
-      <div class="ki-card-icon">🍽️</div>
-      <div class="ki-card-title">Wochenmenü-Vorschlag</div>
-      <div class="ki-card-sub">KI schlägt saisonalen Menüplan vor, passend zu Allergien</div>
-      <div class="ki-fields">
-        <div class="field"><label>Saison / Monat</label>
-          <select id="kiSaison" class="field-input">
-            ${["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"].map((m,i)=>`<option${i===new Date().getMonth()?" selected":""}>${m}</option>`).join("")}
-          </select>
-        </div>
-        <div class="field"><label>Bekannte Allergien im Betrieb</label>
-          <input id="kiAllergien" class="field-input" value="${allergien.join(", ")||"Keine bekannt"}" placeholder="z.B. Nüsse, Laktose, Gluten"/>
-        </div>
-        <div class="field"><label>Budget/Person/Tag (CHF)</label>
-          <input id="kiBudget" type="number" class="field-input" value="6" min="3" max="15"/>
-        </div>
-        <div class="field"><label>Küche / Präferenz</label>
-          <select id="kiKueche" class="field-input">
-            <option>Schweizer Hausmannskost</option>
-            <option>International & abwechslungsreich</option>
-            <option>Mediterran</option>
-            <option>Vegetarisch-freundlich</option>
-          </select>
-        </div>
-      </div>
-      <button class="ki-btn" onclick="_kiEssensplan()">✨ Menüplan vorschlagen</button>
-      <div class="ki-result" id="kiEssenResult"></div>
-    </div>
-    <div class="ki-card">
-      <div class="ki-card-icon">📋</div>
-      <div class="ki-card-title">Entwicklungsbericht</div>
-      <div class="ki-card-sub">Beobachtungsnotizen → strukturierter pädagogischer Bericht</div>
-      <div class="ki-fields">
-        <div class="field"><label>Kind</label>
-          <select id="kiBeobKind" class="field-input">
-            ${kinder.map(k=>`<option value="${k.id}" data-name="${k.name}" data-geb="${k.geb||""}">${k.name}</option>`).join("")}
-          </select>
-        </div>
-        <div class="field"><label>Beobachtungsnotizen (frei formuliert)</label>
-          <textarea id="kiBeobText" style="min-height:80px" class="field-input" placeholder="z.B. Lena läuft jetzt alleine sicher, klettert gerne, spricht 2-Wort-Sätze, zeigt Interesse an anderen Kindern, tröstet sich selbst durch Daumen…"></textarea>
-        </div>
-        <div class="field"><label>Zeitraum</label>
-          <input id="kiBeobZeitraum" class="field-input" placeholder="z.B. Januar–März 2026"/>
-        </div>
-      </div>
-      <button class="ki-btn" onclick="_kiEntwicklungsbericht()">✨ Bericht generieren</button>
-      <div class="ki-result" id="kiEntwicklungResult"></div>
-    </div>
-    <div class="ki-card">
-      <div class="ki-card-icon">⚠️</div>
-      <div class="ki-card-title">Unfallbericht → SUVA-Text</div>
-      <div class="ki-card-sub">Kurzbeschreibung in korrekte Behördensprache übersetzen</div>
-      <div class="ki-fields">
-        <div class="field"><label>Kind & Alter</label>
-          <input id="kiUnfallKind" class="field-input" placeholder="z.B. Lena M., 3 Jahre"/>
-        </div>
-        <div class="field"><label>Was ist passiert? (frei beschreiben)</label>
-          <textarea id="kiUnfallBeschr" style="min-height:80px" class="field-input" placeholder="z.B. Kind ist vom Klettergerüst gefallen, ca. 80cm Höhe, auf den Arm gefallen, hat geweint, Arm geschwollen…"></textarea>
-        </div>
-        <div class="field"><label>Getroffene Sofortmassnahmen</label>
-          <input id="kiUnfallMass" class="field-input" placeholder="z.B. Eis, Kühlung, Arzt aufgesucht"/>
-        </div>
-      </div>
-      <button class="ki-btn" onclick="_kiSuvaText()">✨ SUVA-Text generieren</button>
-      <div class="ki-result" id="kiSuvaResult"></div>
-    </div>
-    <div class="ki-card">
-      <div class="ki-card-icon">📬</div>
-      <div class="ki-card-title">Mahnung formulieren</div>
-      <div class="ki-card-sub">Freundliche aber klare Mahnung automatisch schreiben</div>
-      <div class="ki-fields">
-        <div class="field"><label>Rechnung wählen (überfällig)</label>
-          <select id="kiMahnungRech" class="field-input">
-            <option value="">– Rechnung wählen –</option>
-            ${[...rechnungen].filter(r=>r.status==="offen"&&r.faellig&&r.faellig<new Date().toISOString().slice(0,10)).map(r=>{
-              const tage=Math.round((new Date()-new Date(r.faellig))/86400000);
-              return `<option value="${r.id}">${r.kindName} — CHF ${r.betrag} — ${tage} Tage überfällig</option>`;
-            }).join("")}
-          </select>
-        </div>
-        <div class="field"><label>Mahnstufe</label>
-          <select id="kiMahnStufe" class="field-input">
-            <option value="1">1. Mahnung — Freundliche Erinnerung</option>
-            <option value="2">2. Mahnung — Bestimmter Ton</option>
-            <option value="3">3. Mahnung — Letzte Warnung vor Inkasso</option>
-          </select>
-        </div>
-        <div class="field"><label>Besonderer Hinweis (optional)</label>
-          <input id="kiMahnHinweis" class="field-input" placeholder="z.B. Ratenzahlung anbieten, Kontakt aufnehmen…"/>
-        </div>
-      </div>
-      <button class="ki-btn" onclick="_kiMahnung()">✨ Mahnung generieren</button>
-      <div class="ki-result" id="kiMahnungResult"></div>
-    </div>
-
+    <div id="${id}Out" class="ki-inline-out"></div>
   </div>`;
 }
 
-// ── GROQ FUNKTIONEN ────────────────────────────────────────
-const KITA_KONTEXT = () => `Du bist Assistent für ${KITA.name}, eine Kita in ${KITA.ort}, Schweiz. Antworte immer auf Schweizer Hochdeutsch, professionell und prägnant.`;
+function kiShow(id, html) {
+  const el=$(id+"Out"), spin=$(id+"Spin");
+  if(spin) spin.style.display="none";
+  if(el) el.innerHTML=html;
+}
+function kiSpin(id) {
+  const spin=$(id+"Spin"); if(spin) spin.style.display="inline";
+  const el=$(id+"Out"); if(el) el.innerHTML="";
+}
 
-window._kiElternbrief = async () => {
-  const thema=$("kiBetreff").value, stichworte=$("kiStichworte").value.trim(), ton=$("kiTon").value;
-  if(!stichworte){alert("Bitte Stichworte eingeben.");return;}
-  const el=$("kiBriefResult"); el.innerHTML=`<div class="ki-loading">⚡ Generiere Brief…</div>`;
-  const sys=KITA_KONTEXT()+` Du schreibst Elternbriefe für Schweizer Kitas. Nutze korrekte Schweizer Schreibweise (ss statt ß). Keine Emojis im Brief.`;
-  const usr=`Schreibe einen ${ton} Elternbrief zum Thema "${thema}".\n\nStichworte/Details: ${stichworte}\n\nStruktur: Betreff, Anrede "Liebe Eltern", Haupttext, freundlicher Abschluss, Unterschrift mit "${KITA.name}"\n\nMaximal 250 Wörter.`;
-  const result = await groqCall(sys, usr, t=>{el.innerHTML=`<div class="ki-output">${t.replace(/\n/g,"<br/>")}</div><div class="ki-actions"><button class="btn-xs primary" onclick="_kiInBrief('${encodeURIComponent(t)}')">→ In Kommunikation übernehmen</button><button class="btn-xs slate" onclick="_kiKopieren('kiBriefResult')">📋 Kopieren</button></div>`;});
-  if(!result) el.innerHTML="";
+
+// ── INLINE KI PANELS (per Modul) ──────────────────────────
+
+function kiPanelBrief() {
+  if(!getAiKey()) return '<div class="ki-inline-locked">⚡ <button class="btn-xs slate" onclick="_setTab('ki')">API Key einrichten</button> um KI-Briefe zu generieren</div>';
+  return '<div class="ki-inline-panel">'
+    +'<div class="ki-inline-title">⚡ KI: Elternbrief-Generator</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">'
+    +'<div class="field"><label>Thema</label><select id="kiBThema" class="field-input"><option>Ferieninformation</option><option>Krankheitsregelung</option><option>Eingewöhnung</option><option>Monatsbeitrag</option><option>Anlass / Event</option><option>Allgemeine Information</option></select></div>'
+    +'<div class="field"><label>Ton</label><select id="kiBTon" class="field-input"><option>freundlich und professionell</option><option>warm und persönlich</option><option>sachlich und klar</option></select></div>'
+    +'<div class="field"><label>Stichworte</label><input id="kiBStich" class="field-input" placeholder="Details, Daten, Infos…"/></div></div>'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<button class="ki-btn-sm" onclick="_kiElternbriefInline()">✨ Brief generieren</button>'
+    +'<span id="kiBSpin" style="display:none;color:var(--primary);font-size:11px;font-weight:600">⚡ Generiere…</span>'
+    +'<div id="kiBAct"></div></div>'
+    +'<div id="kiBOut" class="ki-inline-out"></div></div>';
+}
+
+function kiPanelEssen() {
+  if(!getAiKey()) return '<div class="ki-inline-locked">⚡ <button class="btn-xs slate" onclick="_setTab('ki')">API Key einrichten</button> um KI-Menüpläne zu generieren</div>';
+  const allergien=[...new Set(dokumente.filter(d=>d.typ==="allergie").map(d=>d.titel))].join(", ")||"Keine";
+  const monat=new Date().toLocaleDateString("de-CH",{month:"long"});
+  return '<div class="ki-inline-panel">'
+    +'<div class="ki-inline-title">⚡ KI: Wochenmenü-Vorschlag</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">'
+    +'<div class="field"><label>Saison / Monat</label><input id="kiESaison" class="field-input" value="'+monat+'"/></div>'
+    +'<div class="field"><label>Küche</label><select id="kiEKueche" class="field-input"><option>Schweizer Hausmannskost</option><option>International</option><option>Mediterran</option><option>Vegetarisch</option></select></div>'
+    +'<div class="field"><label>Allergien</label><input id="kiEAllerg" class="field-input" value="'+allergien+'"/></div></div>'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<button class="ki-btn-sm" onclick="_kiEssensplanInline()">✨ Menüplan vorschlagen</button>'
+    +'<span id="kiESpin" style="display:none;color:var(--primary);font-size:11px;font-weight:600">⚡ Generiere…</span>'
+    +'<div id="kiEAct"></div></div>'
+    +'<div id="kiEOut" class="ki-inline-out"></div></div>';
+}
+
+function kiPanelBeob(kindId, kindName) {
+  if(!getAiKey()) return '<div class="ki-inline-locked">⚡ <button class="btn-xs slate" onclick="_setTab('ki')">API Key einrichten</button></div>';
+  return '<div class="ki-inline-panel">'
+    +'<div class="ki-inline-title">⚡ KI: Entwicklungsbericht für '+kindName+'</div>'
+    +'<div class="field" style="margin-bottom:8px"><label>Beobachtungsnotizen</label>'
+    +'<textarea id="kiBeobN_'+kindId+'" class="field-input" style="min-height:60px" placeholder="Beobachtungen frei eingeben…"></textarea></div>'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<button class="ki-btn-sm" onclick="_kiBeobInline(''+kindId+'',''+kindName+'')">✨ Bericht generieren</button>'
+    +'<span id="kiBeobSpin_'+kindId+'" style="display:none;color:var(--primary);font-size:11px;font-weight:600">⚡ Generiere…</span></div>'
+    +'<div id="kiBeobOut_'+kindId+'" class="ki-inline-out"></div></div>';
+}
+
+function kiPanelUnfall(unfallId) {
+  if(!getAiKey()) return '<div class="ki-inline-locked">⚡ <button class="btn-xs slate" onclick="_setTab('ki')">API Key einrichten</button></div>';
+  const u=unfaelle.find(x=>x.id===unfallId);
+  if(!u) return "";
+  return '<div class="ki-inline-panel" style="margin-top:8px">'
+    +'<div class="ki-inline-title">⚡ KI: SUVA-Text generieren</div>'
+    +'<div class="cell-sub" style="margin-bottom:8px">Basierend auf: '+esc(u.kindName)+' · '+fmtDate(u.datum)+' · '+esc(u.art)+'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<button class="ki-btn-sm" onclick="_kiSuvaInline(''+unfallId+'')">✨ SUVA-Text generieren</button>'
+    +'<span id="kiSuvaSpin_'+unfallId+'" style="display:none;color:var(--primary);font-size:11px;font-weight:600">⚡ Generiere…</span></div>'
+    +'<div id="kiSuvaOut_'+unfallId+'" class="ki-inline-out"></div></div>';
+}
+
+function kiPanelMahnung(rechId) {
+  if(!getAiKey()) return "";
+  return '<div class="ki-inline-panel" style="margin-top:4px">'
+    +'<div class="ki-inline-title" style="font-size:11px">⚡ KI-Mahnung</div>'
+    +'<div style="display:flex;gap:6px;align-items:center">'
+    +'<select id="kiMStufe_'+rechId+'" class="field-input" style="width:160px;font-size:11px"><option value="1">1. Mahnung</option><option value="2">2. Mahnung</option><option value="3">3. Mahnung</option></select>'
+    +'<button class="ki-btn-sm" onclick="_kiMahnungInline(''+rechId+'')">✨ Generieren</button>'
+    +'<span id="kiMSpin_'+rechId+'" style="display:none;color:var(--primary);font-size:11px">⚡…</span></div>'
+    +'<div id="kiMOut_'+rechId+'" class="ki-inline-out"></div></div>';
+}
+
+function kiPanelSimple(id, title, btnLabel, btnFn) {
+  if(!getAiKey()) return '<div class="ki-inline-locked">⚡ <button class="btn-xs slate" onclick="_setTab('ki')">API Key einrichten</button> für '+title+'</div>';
+  return '<div class="ki-inline-panel">'
+    +'<div class="ki-inline-title">⚡ KI: '+title+'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<button class="ki-btn-sm" onclick="'+btnFn+'">✨ '+btnLabel+'</button>'
+    +'<span id="'+id+'Spin" style="display:none;color:var(--primary);font-size:11px;font-weight:600">⚡ Generiere…</span></div>'
+    +'<div id="'+id+'Out" class="ki-inline-out"></div></div>';
+}
+
+// ── INLINE KI HANDLERS ─────────────────────────────────────
+window._kiElternbriefInline = async () => {
+  const thema=$("kiBThema")?.value||"Allgemeine Information";
+  const ton=$("kiBTon")?.value||"freundlich und professionell";
+  const stich=$("kiBStich")?.value?.trim()||"";
+  $("kiBSpin").style.display="inline"; $("kiBOut").innerHTML=""; $("kiBAct").innerHTML="";
+  const sys=KITA_KONTEXT()+` Du schreibst Elternbriefe für Schweizer Kitas. Schweizer Schreibweise (ss statt ß). Keine Emojis im Brief.`;
+  const usr=`Schreibe einen ${ton} Elternbrief zum Thema "${thema}".
+Details: ${stich||"(keine)"}
+Struktur: Betreff, "Liebe Eltern", Text, Abschluss, "${KITA.name}". Max. 220 Wörter.`;
+  const result=await groqCall(sys,usr,t=>{$("kiBOut").innerHTML=`<div class="ki-inline-out-text">${t.replace(/
+/g,"<br/>")}</div>`;});
+  $("kiBSpin").style.display="none";
+  if(result) $("kiBAct").innerHTML=`<button class="btn-xs primary" onclick="_kiAlsNachricht('${encodeURIComponent(result)}','${encodeURIComponent(thema)}')">→ In Kommunikation</button><button class="btn-xs slate" onclick="_kiCopy(this,'kiBOut')">📋</button>`;
 };
 
-window._kiEssensplan = async () => {
-  const saison=$("kiSaison").value, allergien=$("kiAllergien").value, budget=$("kiBudget").value, kueche=$("kiKueche").value;
-  const el=$("kiEssenResult"); el.innerHTML=`<div class="ki-loading">⚡ Generiere Menüplan…</div>`;
-  const sys=KITA_KONTEXT()+` Du planst Mahlzeiten für Schweizer Kitas mit Kindern im Alter 1–5 Jahre. Gerichte müssen kindgerecht, ausgewogen und einfach zuzubereiten sein.`;
-  const usr=`Erstelle einen Wochenmenüplan (Montag–Freitag) für ${saison}.\n\nBedingungen:\n- Budget: CHF ${budget} pro Kind/Tag\n- Allergien beachten: ${allergien}\n- Küchenstil: ${kueche}\n- Mittagessen + Znüni pro Tag\n- Je 1 Vegi-Option angeben\n\nFormat pro Tag:\n**Montag:** Mittagessen: … | Vegi: … | Znüni: …`;
-  const result = await groqCall(sys, usr, t=>{el.innerHTML=`<div class="ki-output">${t.replace(/\n/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div><div class="ki-actions"><button class="btn-xs slate" onclick="_kiKopieren('kiEssenResult')">📋 Kopieren</button></div>`;});
-  if(!result) el.innerHTML="";
+window._kiEssensplanInline = async () => {
+  const saison=$("kiESaison")?.value||"aktuell", kueche=$("kiEKueche")?.value||"Schweizer Hausmannskost", allerg=$("kiEAllerg")?.value||"keine";
+  $("kiESpin").style.display="inline"; $("kiEOut").innerHTML=""; $("kiEAct").innerHTML="";
+  const sys=KITA_KONTEXT()+` Mahlzeiten für Kinder 1–5 Jahre. Kindgerecht, ausgewogen, einfach zuzubereiten.`;
+  const usr=`Wochenmenüplan (Mo–Fr) für ${saison}, Küche: ${kueche}, Allergien beachten: ${allerg}.
+Format: **Tag:** Mittag: … | Vegi: … | Znüni: …
+Max. 150 Wörter.`;
+  const result=await groqCall(sys,usr,t=>{$("kiEOut").innerHTML=`<div class="ki-inline-out-text">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div>`;});
+  $("kiESpin").style.display="none";
+  if(result) $("kiEAct").innerHTML=`<button class="btn-xs slate" onclick="_kiCopy(this,'kiEOut')">📋 Kopieren</button>`;
 };
 
-window._kiEntwicklungsbericht = async () => {
-  const sel=$("kiBeobKind"), opt=sel.options[sel.selectedIndex];
-  const kindName=opt?.dataset.name||"", geb=opt?.dataset.geb||"";
-  const notizen=$("kiBeobText").value.trim(), zeitraum=$("kiBeobZeitraum").value;
-  if(!notizen){alert("Bitte Beobachtungsnotizen eingeben.");return;}
-  const alter=geb?age(geb)+" Jahre":"";
-  const el=$("kiEntwicklungResult"); el.innerHTML=`<div class="ki-loading">⚡ Generiere Bericht…</div>`;
-  const sys=KITA_KONTEXT()+` Du bist Fachperson Betreuung (FaBe) und schreibst professionelle pädagogische Entwicklungsberichte für Schweizer Kitas in der Sprache der Fachpersonen Betreuung.`;
-  const usr=`Schreibe einen strukturierten Entwicklungsbericht für:\n\nKind: ${kindName} (${alter})\nBeobachtungszeitraum: ${zeitraum||"letztes Quartal"}\n\nBeobachtungsnotizen: ${notizen}\n\nStruktur des Berichts:\n1. Motorische Entwicklung\n2. Sprache & Kommunikation\n3. Sozial-emotionale Entwicklung\n4. Kognitive Entwicklung\n5. Zusammenfassung & Ausblick\n\nTon: professionell-pädagogisch, wertschätzend, konkret. Max. 400 Wörter.`;
-  const result = await groqCall(sys, usr, t=>{el.innerHTML=`<div class="ki-output">${t.replace(/\n/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div><div class="ki-actions"><button class="btn-xs primary" onclick="_kiInBeob(${JSON.stringify(kindName)},${JSON.stringify(t)})">→ Als Beobachtung speichern</button><button class="btn-xs slate" onclick="_kiKopieren('kiEntwicklungResult')">📋 Kopieren</button></div>`;});
-  if(!result) el.innerHTML="";
+window._kiBeobInline = async (kindId, kindName) => {
+  const notiz=$("kiBeobN_"+kindId)?.value?.trim();
+  if(!notiz){alert("Bitte Beobachtungen eingeben.");return;}
+  const spin=$("kiBeobSpin_"+kindId), out=$("kiBeobOut_"+kindId);
+  if(spin)spin.style.display="inline"; if(out)out.innerHTML="";
+  const k=kinder.find(x=>x.id===kindId)||{};
+  const sys=KITA_KONTEXT()+` FaBe-Sprache, pädagogische Entwicklungsberichte.`;
+  const usr=`Entwicklungsbericht für ${kindName} (${k.geb?age(k.geb)+" J.":""}).
+Beobachtungen: ${notiz}
+Struktur: Motorik, Sprache, Sozial-emotional, Kognitiv, Zusammenfassung. Max. 300 Wörter. Wertschätzend, professionell.`;
+  const result=await groqCall(sys,usr,t=>{if(out)out.innerHTML=`<div class="ki-inline-out-text">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div>`;});
+  if(spin)spin.style.display="none";
+  if(result&&out) out.innerHTML+=`<div style="display:flex;gap:6px;margin-top:6px"><button class="btn-xs slate" onclick="_kiCopy(this,'kiBeobOut_${kindId}')">📋 Kopieren</button></div>`;
 };
 
-window._kiSuvaText = async () => {
-  const kind=$("kiUnfallKind").value.trim(), beschr=$("kiUnfallBeschr").value.trim(), mass=$("kiUnfallMass").value.trim();
-  if(!beschr){alert("Bitte Unfallbeschreibung eingeben.");return;}
-  const el=$("kiSuvaResult"); el.innerHTML=`<div class="ki-loading">⚡ Generiere SUVA-Text…</div>`;
-  const sys=KITA_KONTEXT()+` Du schreibst Unfallmeldungen für Schweizer Kitas im korrekten Behördenstil für SUVA und Versicherungen. Sachlich, präzise, vollständig.`;
-  const usr=`Schreibe einen SUVA-konformen Unfallbericht:\n\nBetroffene Person: ${kind||"Kind in Betreuung"}\nDatum: ${new Date().toLocaleDateString("de-CH")}\nEinrichtung: ${KITA.name}, ${KITA.strasse}, ${KITA.plz} ${KITA.ort}\n\nUnfallhergang (intern notiert): ${beschr}\nSofortmassnahmen: ${mass||"keine angegeben"}\n\nBitte formuliere:\n1. Unfallhergang (objektiv, 3–5 Sätze)\n2. Art der Verletzung\n3. Getroffene Massnahmen\n4. Empfehlung weiteres Vorgehen\n\nSprache: Behördendeutsch, Schweiz, sachlich.`;
-  const result = await groqCall(sys, usr, t=>{el.innerHTML=`<div class="ki-output">${t.replace(/\n/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div><div class="ki-actions"><button class="btn-xs slate" onclick="_kiKopieren('kiSuvaResult')">📋 Kopieren</button></div>`;});
-  if(!result) el.innerHTML="";
+window._kiSuvaInline = async (unfallId) => {
+  const u=unfaelle.find(x=>x.id===unfallId); if(!u)return;
+  const spin=$("kiSuvaSpin_"+unfallId), out=$("kiSuvaOut_"+unfallId);
+  if(spin)spin.style.display="inline"; if(out)out.innerHTML="";
+  const sys=KITA_KONTEXT()+` Unfallmeldungen für SUVA/Versicherungen. Sachlich, präzise.`;
+  const usr=`SUVA-Unfallbericht:
+Kind: ${u.kindName}, Datum: ${fmtDate(u.datum)}, Art: ${u.art}
+Hergang: ${u.beschreibung||"–"}
+Verletzung: ${u.verletzung||"–"}
+Massnahmen: ${u.massnahmen||"–"}
+Abschnitte: 1.Hergang 2.Verletzung 3.Massnahmen 4.Empfehlung. Behördendeutsch CH.`;
+  const result=await groqCall(sys,usr,t=>{if(out)out.innerHTML=`<div class="ki-inline-out-text">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div>`;});
+  if(spin)spin.style.display="none";
+  if(result&&out) out.innerHTML+=`<div style="display:flex;gap:6px;margin-top:6px"><button class="btn-xs slate" onclick="_kiCopy(this,'kiSuvaOut_${unfallId}')">📋</button></div>`;
 };
 
-window._kiMahnung = async () => {
-  const rechId=$("kiMahnungRech").value;
-  if(!rechId){alert("Bitte eine Rechnung wählen.");return;}
+window._kiMahnungInline = async (rechId) => {
   const r=rechnungen.find(x=>x.id===rechId); if(!r)return;
-  const stufe=$("kiMahnStufe").value, hinweis=$("kiMahnHinweis").value.trim();
+  const stufe=$("kiMStufe_"+rechId)?.value||"1";
+  const spin=$("kiMSpin_"+rechId), out=$("kiMOut_"+rechId);
+  if(spin)spin.style.display="inline"; if(out)out.innerHTML="";
   const tage=Math.round((new Date()-new Date(r.faellig))/86400000);
-  const el=$("kiMahnungResult"); el.innerHTML=`<div class="ki-loading">⚡ Generiere Mahnung…</div>`;
-  const sys=KITA_KONTEXT()+` Du schreibst Mahnschreiben für Schweizer Kitas. Korrekte Schweizer Schreibweise (ss statt ß). Ton je nach Mahnstufe: 1=freundlich erinnernd, 2=bestimmt, 3=ernst mit Konsequenzen.`;
-  const usr=`Schreibe eine Mahnung (${stufe}. Mahnstufe) für:\n\nKita: ${KITA.name}\nEmpfänger: Eltern von ${r.kindName}\nRechnung Nr.: ${r.nr||"–"}\nBetrag: CHF ${r.betrag}\nFälligkeitsdatum: ${fmtDate(r.faellig)}\nVerzugstage: ${tage} Tage\nZahlungsdetails: IBAN ${KITA.iban}\n${hinweis?"Besonderer Hinweis: "+hinweis:""}\n\nStruktur: Betreff, Anrede, Sachverhalt, Zahlungsaufforderung, Frist (10 Tage), Konsequenzen bei Nichtzahlung (stufenangepasst), freundlicher Abschluss.\nMax. 200 Wörter.`;
-  const result = await groqCall(sys, usr, t=>{el.innerHTML=`<div class="ki-output">${t.replace(/\n/g,"<br/>")}</div><div class="ki-actions"><button class="btn-xs primary" onclick="_kiDruckText('kiMahnungResult')">🖨️ Drucken</button><button class="btn-xs slate" onclick="_kiKopieren('kiMahnungResult')">📋 Kopieren</button></div>`;});
-  if(!result) el.innerHTML="";
+  const sys=KITA_KONTEXT()+` Mahnschreiben. 1=freundlich, 2=bestimmt, 3=letzte Warnung.`;
+  const usr=`${stufe}. Mahnung an Eltern von ${r.kindName}. Rechnung ${r.nr||"–"}, CHF ${r.betrag}, ${tage} Tage überfällig. IBAN: ${KITA.iban}. Frist: 10 Tage. Max. 180 Wörter. Schweizer Deutsch.`;
+  const result=await groqCall(sys,usr,t=>{if(out)out.innerHTML=`<div class="ki-inline-out-text">${t.replace(/
+/g,"<br/>")}</div>`;});
+  if(spin)spin.style.display="none";
+  if(result&&out) out.innerHTML+=`<div style="display:flex;gap:6px;margin-top:6px"><button class="btn-xs primary" onclick="_kiDruckText('kiMOut_${rechId}')">🖨️</button><button class="btn-xs slate" onclick="_kiCopy(this,'kiMOut_${rechId}')">📋</button></div>`;
+};
+
+window._kiMonatInline = async () => {
+  const out=$("kiMonatOut"), spin=$("kiMonatSpin");
+  if(spin)spin.style.display="inline"; if(out)out.innerHTML="";
+  const monat=new Date().toLocaleDateString("de-CH",{month:"long",year:"numeric"});
+  const umsatz=Math.round(kinder.reduce((s,k)=>s+monatlich(k),0));
+  const offen=rechnungen.filter(r=>r.status==="offen");
+  const sys=KITA_KONTEXT();
+  const usr=`Monatsabschluss ${monat} für ${KITA.name}:
+- Kinder: ${kinder.length} (${subvList().length} subv.)
+- Umsatz SOLL: CHF ${umsatz.toLocaleString("de-CH")}
+- Offen: ${offen.length} Rechnungen CHF ${Math.round(offen.reduce((s,r)=>s+(r.betrag||0),0)).toLocaleString("de-CH")}
+- Auslastung: ${Math.round(kinder.length/20*100)}%
+- Warteliste: ${warteliste.length}
+Erstelle: 1.Zusammenfassung Leitung 2.Elternbrief 3.To-Do. Max. 300 Wörter.`;
+  const result=await groqCall(sys,usr,t=>{if(out)out.innerHTML=`<div class="ki-inline-out-text">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div>`;});
+  if(spin)spin.style.display="none";
+  if(result&&out) out.innerHTML+=`<div style="display:flex;gap:6px;margin-top:6px"><button class="btn-xs primary" onclick="_kiDruckText('kiMonatOut')">🖨️</button><button class="btn-xs slate" onclick="_kiCopy(this,'kiMonatOut')">📋</button></div>`;
+};
+
+window._kiAnwInline = async () => {
+  const out=$("kiAnwInlOut"), spin=$("kiAnwInlSpin");
+  if(spin)spin.style.display="inline"; if(out)out.innerHTML="";
+  const days30=Array.from({length:30},(_,i)=>{const d=new Date(Date.now()-i*86400000);return d.toISOString().slice(0,10);});
+  let stats="";
+  kinder.forEach(k=>{
+    const a=anwesenheiten.filter(x=>x.kindId===k.id&&days30.includes(x.datum));
+    const anw=a.filter(x=>x.status==="anwesend").length, abw=a.filter(x=>x.status==="abwesend").length;
+    if(anw+abw>0)stats+=`${k.name}: ${anw}× an, ${abw}× ab
+`;
+  });
+  const sys=KITA_KONTEXT()+` Anwesenheitsanalyse. Muster erkennen, konkrete Empfehlungen geben.`;
+  const usr=`Analysiere Anwesenheitsdaten letzte 30 Tage:
+${stats||"Keine Daten."}
+Erstelle: 1.Zusammenfassung 2.Auffällige Muster 3.Handlungsempfehlungen. Max. 250 Wörter.`;
+  const result=await groqCall(sys,usr,t=>{if(out)out.innerHTML=`<div class="ki-inline-out-text">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div>`;});
+  if(spin)spin.style.display="none";
+  if(result&&out) out.innerHTML+=`<div style="display:flex;gap:6px;margin-top:6px"><button class="btn-xs primary" onclick="_kiDruckText('kiAnwInlOut')">🖨️</button><button class="btn-xs slate" onclick="_kiCopy(this,'kiAnwInlOut')">📋</button></div>`;
+};
+
+window._kiFinInline = async () => {
+  const out=$("kiFinInlOut"), spin=$("kiFinInlSpin");
+  if(spin)spin.style.display="inline"; if(out)out.innerHTML="";
+  const umsatz=Math.round(kinder.reduce((s,k)=>s+monatlich(k),0));
+  const offen=rechnungen.filter(r=>r.status==="offen"), bez=rechnungen.filter(r=>r.status==="bezahlt");
+  const sys=KITA_KONTEXT()+` Finanzberichte für Kita-Leitungen. Klar, strukturiert.`;
+  const usr=`Finanzbericht ${new Date().getFullYear()} für ${KITA.name}:
+- Kinder: ${kinder.length}, Auslastung: ${Math.round(kinder.length/20*100)}%
+- Monatsumsatz SOLL: CHF ${umsatz.toLocaleString("de-CH")}
+- Offen: ${offen.length}× CHF ${Math.round(offen.reduce((s,r)=>s+(r.betrag||0),0)).toLocaleString("de-CH")}
+- Bezahlt: ${bez.length}× CHF ${Math.round(bez.reduce((s,r)=>s+(r.betrag||0),0)).toLocaleString("de-CH")}
+- Subventioniert: ${subvList().length} Kinder
+Bericht: Executive Summary, Kennzahlen, Risiken, Ausblick. Max. 250 Wörter.`;
+  const result=await groqCall(sys,usr,t=>{if(out)out.innerHTML=`<div class="ki-inline-out-text">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div>`;});
+  if(spin)spin.style.display="none";
+  if(result&&out) out.innerHTML+=`<div style="display:flex;gap:6px;margin-top:6px"><button class="btn-xs primary" onclick="_kiDruckText('kiFinInlOut')">🖨️</button><button class="btn-xs slate" onclick="_kiCopy(this,'kiFinInlOut')">📋</button></div>`;
+};
+
+
+// ── NEUE KI INLINE HANDLERS ───────────────────────────────
+
+window._kiTagesrapportInline = async () => {
+  const out=$("kiTagesrapportOut"), spin=$("kiTagesrapportSpin");
+  if(!out)return;
+  if(spin)spin.style.display="inline"; out.innerHTML="";
+  const today=new Date().toISOString().slice(0,10);
+  const anwH=anwesenheiten.filter(a=>a.datum===today);
+  const anw=anwH.filter(a=>a.status==="anwesend").map(a=>a.kindName).join(", ")||"–";
+  const abw=anwH.filter(a=>a.status==="abwesend").map(a=>a.kindName).join(", ")||"–";
+  const menu=essensplaene.find(e=>e.datum===today);
+  const dienst=dienstplaene.filter(d=>d.datum===today).map(d=>d.mitarbeiter).join(", ")||"–";
+  const sys=KITA_KONTEXT()+` Du schreibst tägliche Berichte für Kita-Leitungen, die per Brief/WhatsApp an Eltern gesendet werden. Warm, positiv, kurz.`;
+  const usr=`Schreibe einen freundlichen Tagesrapport für ${new Date().toLocaleDateString("de-CH",{weekday:"long",day:"numeric",month:"long"})}:
+
+Anwesend: ${anw}
+Abwesend: ${abw}
+Mittagessen: ${menu?.mittagessen||"nicht erfasst"}
+Znüni: ${menu?.znueni||"–"}
+Personal: ${dienst}
+
+Format: Kurzer herzlicher Bericht, was die Kinder erlebt haben (kreativ ausschmücken), was es zu essen gab, Abschluss. Max. 150 Wörter.`;
+  const result=await groqCall(sys,usr,t=>{out.innerHTML=`<div class="ki-inline-out-text">${t.replace(/
+/g,"<br/>")}</div>`;});
+  if(spin)spin.style.display="none";
+  if(result) out.innerHTML+=`<div style="display:flex;gap:6px;margin-top:6px">
+    <button class="btn-xs primary" onclick="_kiAlsNachricht('${encodeURIComponent(result)}','${encodeURIComponent("Tagesrapport "+new Date().toLocaleDateString("de-CH"))}')">→ In Kommunikation</button>
+    <button class="btn-xs primary" onclick="_kiDruckText('kiTagesrapportOut')">🖨️</button>
+    <button class="btn-xs slate" onclick="_kiCopy(this,'kiTagesrapportOut')">📋</button>
+  </div>`;
+};
+
+window._kiWillkommenInline = async (kindId, kindName) => {
+  const k=kinder.find(x=>x.id===kindId); if(!k)return;
+  if(!getAiKey()){alert("Bitte zuerst API Key in KI-Einstellungen eingeben.");return;}
+  const t=tarife.find(x=>x.id===k.tarif)||{};
+  const sys=KITA_KONTEXT()+` Du schreibst warme, persönliche Willkommensbriefe für neue Kita-Kinder und ihre Familien.`;
+  const usr=`Schreibe einen herzlichen Willkommensbrief für:
+
+Kind: ${k.name}${k.geb?" ("+age(k.geb)+" Jahre)":""}
+Eltern: ${k.eltern||"die Eltern"}
+Eintritt: ${fmtDate(k.eintritt)}
+Betreuungstage: ${k.tage?.join(", ")||"noch offen"}
+Tarif: ${t.name||"–"}
+
+Inhalt:
+- Herzliches Willkommen
+- Was die Kita bietet
+- Erste Schritte / Eingewöhnung
+- Ansprechperson
+- Freude auf das Kind ausdrücken
+
+Ton: warm, persönlich, einladend. Max. 200 Wörter. Anrede: "${k.eltern?"Liebe Familie "+(k.eltern.split(" ").pop()||k.eltern):"Liebe Eltern"}"`;
+  const loading=`<div class="ki-loading" style="margin-top:8px">⚡ Generiere Willkommensbrief für ${kindName}…</div>`;
+  // Show in a modal-like alert with result
+  const win=window.open("","_blank","width=640,height=500");
+  win.document.write(`<html><body style="font-family:Arial;padding:20px"><h2>⚡ Generiere Brief…</h2><div id="r"></div></body></html>`);
+  const result=await groqCall(sys,usr,t=>{win.document.getElementById("r").innerHTML=`<pre style="white-space:pre-wrap;font-size:13px">${t}</pre>`;});
+  if(result) win.document.body.innerHTML+=`<button onclick="window.print()" style="margin:10px;padding:8px 16px;background:#2563EB;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">🖨️ Drucken</button>`;
+};
+
+window._kiElternGespraechInline = async () => {
+  const out=$("kiElternGespOut"), spin=$("kiElternGespSpin");
+  if(!out)return;
+  if(spin)spin.style.display="inline"; out.innerHTML="";
+  // Pick kind from filter or first
+  const filterId=window._beobKindFilter&&window._beobKindFilter!=="alle"?window._beobKindFilter:null;
+  const k=filterId?kinder.find(x=>x.id===filterId):kinder[0];
+  if(!k){out.innerHTML=`<div class="cell-sub">Bitte zuerst ein Kind im Filter wählen.</div>`;if(spin)spin.style.display="none";return;}
+  const beobK=beobachtungen.filter(b=>b.kindId===k.id).sort((a,c)=>c.datum.localeCompare(a.datum)).slice(0,5);
+  const anwK=anwesenheiten.filter(a=>a.kindId===k.id);
+  const anw=anwK.filter(a=>a.status==="anwesend").length, abw=anwK.filter(a=>a.status==="abwesend").length;
+  const ewProto=dokumente.find(d=>d.typ==="eingewoehnung"&&d.kindId===k.id);
+  const sys=KITA_KONTEXT()+` Du erstellst Gesprächsleitfäden für Elterngespräche in Kitas. Strukturiert, professionell, lösungsorientiert.`;
+  const usr=`Erstelle einen Gesprächsleitfaden für ein Elterngespräch mit den Eltern von ${k.name} (${k.geb?age(k.geb)+" Jahre":""}).
+
+Verfügbare Daten:
+- Beobachtungen: ${beobK.map(b=>b.bereich+": "+b.beobachtung?.slice(0,60)).join(" | ")||"Keine"}
+- Anwesenheit: ${anw} Tage, ${abw} Fehltage
+- Eingewöhnung Phase: ${ewProto?ewProto.phase+"/4":"nicht erfasst"}
+- Eintritt: ${fmtDate(k.eintritt)}
+
+Leitfaden mit:
+1. Begrüssung und Gesprächsziel
+2. Positive Beobachtungen (konkret)
+3. Entwicklungsbereiche / Themen
+4. Elternfragen / gemeinsame Ziele
+5. Abschluss und nächste Schritte
+
+Max. 300 Wörter. Professionell, wertschätzend.`;
+  const result=await groqCall(sys,usr,t=>{out.innerHTML=`<div class="ki-inline-out-text">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div>`;});
+  if(spin)spin.style.display="none";
+  if(result) out.innerHTML+=`<div style="display:flex;gap:6px;margin-top:6px"><button class="btn-xs primary" onclick="_kiDruckText('kiElternGespOut')">🖨️ Drucken</button><button class="btn-xs slate" onclick="_kiCopy(this,'kiElternGespOut')">📋</button></div>`;
+};
+
+window._kiFoerderzieleInline = async () => {
+  const out=$("kiFoerderOut"), spin=$("kiFoerderSpin");
+  if(!out)return;
+  if(spin)spin.style.display="inline"; out.innerHTML="";
+  const filterId=window._beobKindFilter&&window._beobKindFilter!=="alle"?window._beobKindFilter:null;
+  const k=filterId?kinder.find(x=>x.id===filterId):kinder[0];
+  if(!k){out.innerHTML=`<div class="cell-sub">Bitte zuerst ein Kind im Filter wählen.</div>`;if(spin)spin.style.display="none";return;}
+  const beobK=beobachtungen.filter(b=>b.kindId===k.id).sort((a,c)=>c.datum.localeCompare(a.datum)).slice(0,6);
+  const sys=KITA_KONTEXT()+` Du formulierst SMART-Förderziele für Schweizer Kitas. Konkret, messbar, realistisch, zeitgebunden.`;
+  const usr=`Formuliere 5 konkrete Förderziele für ${k.name} (${k.geb?age(k.geb)+" Jahre":""}).
+
+Aktuelle Beobachtungen:
+${beobK.map(b=>`${b.bereich}: ${b.beobachtung?.slice(0,80)||"–"} (${b.stufe}/5 Sterne)`).join("
+")||"Keine Beobachtungen vorhanden."}
+
+Erstelle 5 SMART-Förderziele:
+- Motorik, Sprache, Sozial, Kognitiv, Kreativität je 1 Ziel
+- Format: [Bereich]: [Ziel] — Bis: [Zeitraum] — Massnahme: [wie]
+
+Praktisch, umsetzbar im Kita-Alltag. Max. 250 Wörter.`;
+  const result=await groqCall(sys,usr,t=>{out.innerHTML=`<div class="ki-inline-out-text">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div>`;});
+  if(spin)spin.style.display="none";
+  if(result) out.innerHTML+=`<div style="display:flex;gap:6px;margin-top:6px"><button class="btn-xs primary" onclick="_kiDruckText('kiFoerderOut')">🖨️ Drucken</button><button class="btn-xs slate" onclick="_kiCopy(this,'kiFoerderOut')">📋</button></div>`;
+};
+
+window._kiStelleninserat = async () => {
+  const out=$("kiStellenOut"), spin=$("kiStellenSpin");
+  if(!out)return;
+  if(spin)spin.style.display="inline"; out.innerHTML="";
+  const sys=KITA_KONTEXT()+` Du schreibst Stelleninserate für Schweizer Kitas. Ansprechend, klar, SECO-konform.`;
+  const usr=`Schreibe ein Stelleninserat für ${KITA.name} in ${KITA.ort}.
+
+Kita:
+- Plätze: 20 (aktuell ${kinder.length} belegt)
+- Mitarbeiter: ${mitarbeiter.filter(m=>m.status==="aktiv").length} aktiv
+- Ort: ${KITA.plz} ${KITA.ort}
+
+Erstelle ein vollständiges Inserat für:
+- Position: Fachperson Betreuung (FaBe) oder FAGE
+- Pensum: 60–100%
+- Bereiche: Tagesbetreuung Kinder 0–5 Jahre
+
+Struktur:
+1. Einleitung (Kita vorstellen)
+2. Aufgaben
+3. Anforderungen (Ausbildung, Erfahrung)
+4. Was wir bieten
+5. Bewerbung / Kontakt
+
+Ton: professionell, einladend. Schweizer Arbeitsmarkt. Max. 300 Wörter.`;
+  const result=await groqCall(sys,usr,t=>{out.innerHTML=`<div class="ki-inline-out-text">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div>`;});
+  if(spin)spin.style.display="none";
+  if(result) out.innerHTML+=`<div style="display:flex;gap:6px;margin-top:6px"><button class="btn-xs primary" onclick="_kiDruckText('kiStellenOut')">🖨️ Drucken</button><button class="btn-xs slate" onclick="_kiCopy(this,'kiStellenOut')">📋</button></div>`;
+};
+
+window._kiWochenrueckblickInline = async () => {
+  if(!getAiKey()){alert("Bitte zuerst API Key in KI-Einstellungen eingeben.");return;}
+  const now=new Date(), sow=new Date(now);
+  sow.setDate(now.getDate()-((now.getDay()||7)-1));
+  const weekDates=[0,1,2,3,4].map(i=>{const d=new Date(sow);d.setDate(sow.getDate()+i);return d.toISOString().slice(0,10);});
+  const weekAnw=anwesenheiten.filter(a=>weekDates.includes(a.datum));
+  const weekMenus=essensplaene.filter(e=>weekDates.includes(e.datum));
+  const weekEvents=nachrichten.filter(n=>weekDates.includes(n.datum));
+  const avgAnw=weekDates.length?Math.round(weekAnw.filter(a=>a.status==="anwesend").length/5):0;
+  const sys=KITA_KONTEXT()+` Du schreibst wöchentliche Rückblicke für Kitas — für Elterntafel, Newsletter oder WhatsApp-Gruppe. Warm, lebendig, positiv.`;
+  const usr=`Schreibe einen Wochenrückblick für die Woche ${sow.toLocaleDateString("de-CH",{day:"numeric",month:"long"})}–${new Date(sow.getTime()+4*86400000).toLocaleDateString("de-CH",{day:"numeric",month:"long",year:"numeric"})}:
+
+Daten:
+- Ø Anwesend: ${avgAnw} Kinder/Tag
+- Menüs: ${weekMenus.map(m=>m.mittagessen||"–").filter(Boolean).join(", ")||"nicht erfasst"}
+- Events/Aktivitäten: ${weekEvents.map(e=>e.betreff).join(", ")||"keine"}
+- Total Kinder: ${kinder.length}
+
+Format: Freudiger, lebendiger Rückblick was in der Woche passiert ist (kreativ ausschmücken), Highlights, Vorschau nächste Woche. Für Eltern. Max. 200 Wörter.`;
+  const win=window.open("","_blank","width=640,height=500");
+  win.document.write(`<html><head><meta charset='UTF-8'></head><body style="font-family:Arial;padding:20px"><h2>📝 Wochenrückblick wird generiert…</h2><div id="r" style="white-space:pre-wrap;line-height:1.7;font-size:13px"></div></body></html>`);
+  const result=await groqCall(sys,usr,t=>{win.document.getElementById("r").textContent=t;});
+  if(result) win.document.body.innerHTML+=`<button onclick="window.print()" style="margin:10px;padding:8px 16px;background:#2563EB;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">🖨️ Drucken</button>`;
+};
+
+// ── NEUE KI INLINE HANDLERS END ───────────────────────────
+
+window._kiAlsNachricht=(enc,betreff)=>{
+  const text=decodeURIComponent(enc);
+  _setTab("kommunikation");
+  setTimeout(()=>{ _openNachrichtModal(null,null,"brief"); setTimeout(()=>{ if($("nmInhalt"))$("nmInhalt").value=text; if($("nmBetreff"))$("nmBetreff").value=decodeURIComponent(betreff); },100); },200);
+};
+window._kiBeschwerdeQuick = async () => {
+  const t=$("kiQualKommOut"); if(t) t.innerHTML="";
+  const text=prompt("Elternbeschwerde eingeben:");
+  if(!text) return;
+  const spin=$("kiQualKommSpin"); if(spin) spin.style.display="inline";
+  const sys=KITA_KONTEXT()+` Professionelle, deeskalierende Antworten auf Elternbeschwerden.`;
+  const usr=`Elternbeschwerde: "${text}"
+
+Professionelle Antwort: Empathie zeigen, Sachverhalt, Lösung, Gesprächsbereitschaft. Absender: ${KITA.name}. Max. 200 Wörter.`;
+  const result=await groqCall(sys,usr,t=>{if($("kiQualKommOut"))$("kiQualKommOut").innerHTML=`<div class="ki-inline-out-text">${t.replace(/
+/g,"<br/>")}</div>`;});
+  if(spin) spin.style.display="none";
+  if(result&&$("kiQualKommOut")) $("kiQualKommOut").innerHTML+=`<div style="display:flex;gap:6px;margin-top:6px"><button class="btn-xs primary" onclick="_kiAlsNachricht('${encodeURIComponent(result)}','Antwort auf Ihre Mitteilung')">→ In Kommunikation</button><button class="btn-xs slate" onclick="_kiCopy(this,'kiQualKommOut')">📋</button></div>`;
+};
+window._kiCopy=(btn,id)=>{
+  const el=$(id); const text=el?.querySelector(".ki-inline-out-text")?.innerText||el?.innerText||"";
+  navigator.clipboard.writeText(text).then(()=>{ const old=btn.textContent; btn.textContent="✅"; setTimeout(()=>btn.textContent=old,2000); }).catch(()=>alert("Kopieren nicht möglich"));
+};
+
+
+function renderKiAssistent() {
+  const key = getAiKey();
+  const saved = !!key;
+  return `
+  <div style="max-width:100%">
+    <div class="table-title" style="font-size:18px;margin-bottom:6px">⚙️ KI-Einstellungen</div>
+    <div class="cell-sub" style="margin-bottom:20px">API Key einmalig speichern — KI-Buttons erscheinen direkt in den jeweiligen Modulen</div>
+
+    <div class="table-card" style="padding:22px;margin-bottom:14px">
+      <div class="table-title" style="margin-bottom:14px">🔑 API Key</div>
+      <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center">
+        <input id="aiKeyInput" type="password" class="field-input"
+          placeholder="${getAiProvider().keyLabel}"
+          value="${key}"
+          onkeydown="if(event.key==='Enter')_saveAiKeyNow(this.value)"/>
+        <button class="btn-primary" onclick="_saveAiKeyNow($('aiKeyInput').value)">💾 Speichern</button>
+        <a href="${getAiProvider().keyUrl}" target="_blank" class="btn-secondary">Key holen →</a>
+      </div>
+      <span id="aiKeySavedHint" style="font-size:11px;color:var(--green);display:none;margin-top:6px;display:block">✅ Key gespeichert</span>
+      ${saved?`<div style="margin-top:10px;font-size:12px;color:var(--green)">✅ API Key ist gespeichert und aktiv</div>`:`<div style="margin-top:10px;font-size:12px;color:var(--amber)">⚠️ Noch kein Key — KI-Funktionen nicht verfügbar</div>`}
+    </div>
+
+    <div class="table-card" style="padding:22px;margin-bottom:14px">
+      <div class="table-title" style="margin-bottom:14px">🤖 Modell</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label>Anbieter</label>
+          <select id="aiProviderSel" class="field-input" onchange="_updateAiProvider(this.value)">
+            ${Object.entries(AI_PROVIDERS).map(([k,p])=>`<option value="${k}"${_aiSettings.provider===k?" selected":""}>${p.name}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field"><label>Modell</label>
+          <select id="aiModelSel" class="field-input" onchange="_updateAiModel(this.value)">
+            ${getAiProvider().models.map(m=>`<option value="${m}"${_aiSettings.model===m?" selected":""}>${m}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-card" style="padding:22px">
+      <div class="table-title" style="margin-bottom:12px">⚡ KI-Workflows — Übersicht</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${[
+          {modul:"Kommunikation",     icon:"📄", fn:"Elternbrief-Generator"},
+          {modul:"Essensplan",        icon:"🍽️", fn:"Wochenmenü-Vorschlag"},
+          {modul:"Entwicklungsberichte",icon:"📋",fn:"Entwicklungsbericht"},
+          {modul:"Unfallprotokoll",   icon:"⚠️", fn:"SUVA-Text"},
+          {modul:"Mahnwesen",         icon:"📬", fn:"Mahnung formulieren"},
+          {modul:"Belegungsliste",    icon:"🔄", fn:"Monatsabschluss"},
+          {modul:"Anwesenheitsstatistik",icon:"📊",fn:"Anwesenheits-Analyse"},
+          {modul:"KESB / Behörden",   icon:"⚖️", fn:"Gefährdungsmeldung"},
+          {modul:"Jahresabschluss",   icon:"💰", fn:"Finanzbericht"},
+          {modul:"Eingewöhnung",      icon:"👶", fn:"Abschlussbericht"},
+          {modul:"Stelleninserat",    icon:"💼", fn:"Stelleninserat schreiben"},
+          {modul:"Tagesrapport",      icon:"📝", fn:"Tagesrapport"},
+          {modul:"Belegung/KI",       icon:"📊", fn:"Qualitätsbericht"},
+          {modul:"Kommunikation/KI",  icon:"💬", fn:"Beschwerdemanagement"},
+          {modul:"KI-Einstellungen",  icon:"📖", fn:"Pädagogisches Konzept"},
+          {modul:"KI-Einstellungen",  icon:"📋", fn:"Elternumfrage als PDF"},
+        ].map(w=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--bg);border-radius:7px">
+          <span style="font-size:16px">${w.icon}</span>
+          <span style="font-size:12.5px;font-weight:600;flex:1">${w.fn}</span>
+          <span class="cell-sub" style="font-size:11px">→ ${w.modul}</span>
+          ${saved?'<span style="color:var(--green);font-size:11px">✅</span>':'<span style="color:var(--muted);font-size:11px">🔒</span>'}
+        </div>`).join("")}
+      </div>
+    </div>
+  </div>`;
+}
+
+
+// ── NEUE KI WORKFLOWS ─────────────────────────────────────
+
+window._kiMonatsabschluss = async () => {
+  const monat=$("kiMonatAbschl").value, hinweis=$("kiMonatHinweis").value.trim();
+  const el=$("kiMonatResult"); el.innerHTML=`<div class="ki-loading">⚡ Generiere Monatsabschluss…</div>`;
+  const now=new Date();
+  const offeneR=rechnungen.filter(r=>r.status==="offen");
+  const bezR=rechnungen.filter(r=>r.status==="bezahlt");
+  const umsatz=Math.round(kinder.reduce((s,k)=>s+monatlich(k),0));
+  const sys=KITA_KONTEXT()+` Du erstellst Monatsberichte für Kita-Leitungen in der Schweiz. Klar strukturiert, professionell.`;
+  const usr=`Erstelle einen Monatsabschluss für ${monat} ${now.getFullYear()} für "${KITA.name}".
+
+Daten:
+- Kinder: ${kinder.length} (${subvList().length} subventioniert)
+- Belegung: ${Math.round(kinder.length/20*100)}% (${kinder.length}/20 Plätze)
+- Monatsumsatz: CHF ${umsatz.toLocaleString("de-CH")}
+- Rechnungen offen: ${offeneR.length} (CHF ${Math.round(offeneR.reduce((s,r)=>s+(r.betrag||0),0)).toLocaleString("de-CH")})
+- Rechnungen bezahlt: ${bezR.length}
+- Warteliste: ${warteliste.length} Kinder
+${hinweis?"- Hinweise: "+hinweis:""}
+
+Erstelle:
+1. **Zusammenfassung für Leitung** (Stichpunkte, 5–8 Zeilen)
+2. **Elternbrief ${monat}** (freundlich, mit wichtigsten Infos)
+3. **Offene Punkte / To-Do** (was muss noch erledigt werden)
+
+Sprache: Schweizer Hochdeutsch.`;
+  const result=await groqCall(sys,usr,t=>{el.innerHTML=`<div class="ki-output">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div><div class="ki-actions"><button class="btn-xs primary" onclick="_kiDruckText('kiMonatResult')">🖨️ Drucken</button><button class="btn-xs slate" onclick="_kiKopieren('kiMonatResult')">📋 Kopieren</button></div>`;});
+  if(!result)el.innerHTML="";
+};
+
+window._kiEwAbschluss = async () => {
+  const sel=$("kiEwKind"), opt=sel.options[sel.selectedIndex];
+  const kindId=sel.value, kindName=opt?.dataset.name||"";
+  if(!kindId){alert("Kind wählen!");return;}
+  const el=$("kiEwResult"); el.innerHTML=`<div class="ki-loading">⚡ Generiere Eingewöhnungs-Abschlussbericht…</div>`;
+  const k=kinder.find(x=>x.id===kindId)||{};
+  const proto=dokumente.find(d=>d.typ==="eingewoehnung"&&d.kindId===kindId)||{};
+  const phase=Number(proto.phase||0);
+  const notizen=dokumente.filter(d=>d.typ==="ew_notiz"&&d.kindId===kindId).map(n=>`${fmtDate(n.datum)}: ${n.notiz}`).join("
+");
+  const zusatz=$("kiEwNotizen").value.trim();
+  const PHASEN=["Grundphase","Erweiterungsphase","Stabilisierungsphase","Schlussphase","Abgeschlossen"];
+  const sys=KITA_KONTEXT()+` Du schreibst pädagogische Eingewöhnungsberichte für Schweizer Kitas nach dem Berliner Modell.`;
+  const usr=`Schreibe einen Eingewöhnungs-Abschlussbericht für ein Elterngespräch:
+
+Kind: ${kindName} (${k.geb?age(k.geb)+" Jahre":""})
+Eintritt: ${fmtDate(k.eintritt)}
+Aktuelle Phase: ${PHASEN[Math.min(phase,4)]} (Phase ${phase+1}/5)
+${notizen?"Verlaufsnotizen:
+"+notizen:""}
+${zusatz?"Weitere Beobachtungen: "+zusatz:""}
+
+Struktur:
+1. Verlauf der Eingewöhnung
+2. Stärken & Ressourcen des Kindes
+3. Beziehungsgestaltung zur Fachperson
+4. Sozialverhalten mit anderen Kindern
+5. Empfehlungen für Eltern
+
+Ton: wertschätzend, pädagogisch fundiert, elterngerecht. Max. 350 Wörter.`;
+  const result=await groqCall(sys,usr,t=>{el.innerHTML=`<div class="ki-output">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div><div class="ki-actions"><button class="btn-xs primary" onclick="_kiDruckText('kiEwResult')">🖨️ Drucken</button><button class="btn-xs slate" onclick="_kiKopieren('kiEwResult')">📋 Kopieren</button></div>`;});
+  if(!result)el.innerHTML="";
+};
+
+window._kiAnwesenheitsAnalyse = async () => {
+  const sel=$("kiAnwKind"), opt=sel.options[sel.selectedIndex];
+  const kindId=sel.value, kindName=opt?.dataset.name||"Alle";
+  const tage=Number($("kiAnwZeitraum").value);
+  const el=$("kiAnwResult"); el.innerHTML=`<div class="ki-loading">⚡ Analysiere Anwesenheitsdaten…</div>`;
+  const cutoff=new Date(Date.now()-tage*86400000).toISOString().slice(0,10);
+  const relevant=kindId==="alle"?anwesenheiten:anwesenheiten.filter(a=>a.kindId===kindId);
+  const recent=relevant.filter(a=>a.datum>=cutoff);
+
+  let statsText="";
+  if(kindId==="alle"){
+    kinder.forEach(k=>{
+      const kanw=recent.filter(a=>a.kindId===k.id&&a.status==="anwesend").length;
+      const kabw=recent.filter(a=>a.kindId===k.id&&a.status==="abwesend").length;
+      if(kanw+kabw>0) statsText+=`${k.name}: ${kanw}× anwesend, ${kabw}× abwesend
+`;
+    });
+  } else {
+    const kanw=recent.filter(a=>a.status==="anwesend");
+    const kabw=recent.filter(a=>a.status==="abwesend");
+    // Wochentag-Analyse
+    const wdMap={"1":"Mo","2":"Di","3":"Mi","4":"Do","5":"Fr","6":"Sa","0":"So"};
+    const abwWd={};
+    kabw.forEach(a=>{const wd=new Date(a.datum).getDay();abwWd[wd]=(abwWd[wd]||0)+1;});
+    const topWd=Object.entries(abwWd).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([d,n])=>wdMap[d]+"("+n+"×)").join(", ");
+    statsText=`Anwesend: ${kanw.length}×, Abwesend: ${kabw.length}×
+Häufige Fehltage: ${topWd||"kein Muster"}
+Quote: ${kanw.length+kabw.length>0?Math.round(kanw.length/(kanw.length+kabw.length)*100):0}%`;
+  }
+
+  const sys=KITA_KONTEXT()+` Du analysierst Anwesenheitsdaten von Kitas und gibst konkrete, handlungsorientierte Empfehlungen für Kita-Leitungen.`;
+  const usr=`Analysiere die Anwesenheitsdaten der letzten ${tage} Tage für ${kindId==="alle"?"alle Kinder":kindName} der Kita "${KITA.name}":
+
+${statsText||"Keine Daten vorhanden."}
+
+Erstelle:
+1. **Zusammenfassung** der Anwesenheitssituation
+2. **Auffällige Muster** (Wochentage, Häufigkeit)
+3. **Konkrete Handlungsempfehlungen** (Elterngespräch, Massnahmen)
+4. **Positives** hervorheben
+
+Maximal 250 Wörter. Professionell, sachlich, lösungsorientiert.`;
+  const result=await groqCall(sys,usr,t=>{el.innerHTML=`<div class="ki-output">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div><div class="ki-actions"><button class="btn-xs primary" onclick="_kiDruckText('kiAnwResult')">🖨️ Drucken</button><button class="btn-xs slate" onclick="_kiKopieren('kiAnwResult')">📋 Kopieren</button></div>`;});
+  if(!result)el.innerHTML="";
+};
+
+window._kiGemeindeAbrechnung = async () => {
+  const monat=$("kiGemMonat").value, gemeinde=$("kiGemGemeinde").value.trim();
+  const el=$("kiGemResult"); el.innerHTML=`<div class="ki-loading">⚡ Generiere Gemeindebericht…</div>`;
+  const now=new Date();
+  const subvKinder=subvList();
+  const privKinder=kinder.filter(k=>!k.subv);
+  const totalBetrag=Math.round(subvKinder.reduce((s,k)=>s+monatlich(k),0));
+  const sys=KITA_KONTEXT()+` Du erstellst offizielle Abrechnungsberichte für Schweizer Gemeinden. Präzise, vollständig, professionell.`;
+  const usr=`Erstelle einen Subventions-Abrechnungsbericht für die Gemeinde ${gemeinde} für den Monat ${monat} ${now.getFullYear()}.
+
+Kita: ${KITA.name}
+Adresse: ${KITA.strasse}, ${KITA.plz} ${KITA.ort}
+UID: ${KITA.uid}
+
+Daten:
+- Total Kinder: ${kinder.length}
+- Subventionierte Kinder: ${subvKinder.length} (${Math.round(subvKinder.length/(kinder.length||1)*100)}%)
+- Privat zahlende Kinder: ${privKinder.length}
+- Belegung: ${Math.round(kinder.length/20*100)}% (${kinder.length}/20)
+- Subventionierter Betreuungsbetrag: CHF ${totalBetrag.toLocaleString("de-CH")}/Monat
+- IBAN: ${KITA.iban}
+
+Erstelle:
+1. **Abrechnungskopf** (Kita, Gemeinde, Periode)
+2. **Belegungsübersicht** (tabellarisch)
+3. **Subventionsbetrag** und Berechnung
+4. **Zahlungsaufforderung**
+
+Sprache: offizielles Schweizer Deutsch, behördentauglich.`;
+  const result=await groqCall(sys,usr,t=>{el.innerHTML=`<div class="ki-output">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div><div class="ki-actions"><button class="btn-xs primary" onclick="_kiDruckText('kiGemResult')">🖨️ Drucken</button><button class="btn-xs slate" onclick="_kiKopieren('kiGemResult')">📋 Kopieren</button></div>`;});
+  if(!result)el.innerHTML="";
+};
+
+window._kiKESBMeldung = async () => {
+  const sel=$("kiKESBKind"), opt=sel.options[sel.selectedIndex];
+  const kindName=opt?.dataset.name||"", alter=opt?.dataset.alter||"";
+  const beob=$("kiKESBBeob").value.trim(), mass=$("kiKESBMass").value.trim();
+  if(!beob){alert("Bitte Beobachtungen eingeben.");return;}
+  const el=$("kiKESBResult"); el.innerHTML=`<div class="ki-loading">⚡ Generiere KESB-Meldung…</div>`;
+  const sys=KITA_KONTEXT()+` Du verfasst Gefährdungsmeldungen für Schweizer Kindesschutzbehörden (KESB) gemäss Art. 314b ZGB. Sachlich, präzise, vollständig — keine Spekulationen, nur Fakten.`;
+  const usr=`Verfasse eine Gefährdungsmeldung an die KESB:
+
+Meldende Institution: ${KITA.name}
+Adresse: ${KITA.strasse}, ${KITA.plz} ${KITA.ort}
+Datum: ${new Date().toLocaleDateString("de-CH")}
+
+Betroffenes Kind: ${kindName||"[Name]"} (${alter?alter+" Jahre":"Alter unbekannt"})
+
+Beobachtungen/Sachverhalt:
+${beob}
+
+Bisherige Massnahmen:
+${mass||"Keine"}
+
+Struktur der Meldung:
+1. Personalien Kind und Erziehungsberechtigte (Platzhalter)
+2. Sachverhaltsdarstellung (objektiv, Fakten)
+3. Zeitlicher Verlauf der Beobachtungen
+4. Bisher getroffene Massnahmen
+5. Begründung der Meldung
+6. Datum und Unterschrift
+
+Wichtig: Nur beobachtbare Fakten, keine Interpretationen. Schweizer Behördendeutsch.`;
+  const result=await groqCall(sys,usr,t=>{el.innerHTML=`<div class="ki-output">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div><div class="ki-actions"><button class="btn-xs primary" onclick="_kiDruckText('kiKESBResult')">🖨️ Drucken</button><button class="btn-xs slate" onclick="_kiKopieren('kiKESBResult')">📋 Kopieren</button></div><div class="cell-sub" style="margin-top:6px;color:var(--red)">⚠️ Bitte durch Fachperson prüfen bevor Einreichung.</div>`;});
+  if(!result)el.innerHTML="";
+};
+
+window._kiFinanzBericht = async () => {
+  const empf=$("kiFinEmpf").value, hinweis=$("kiFinHinweis").value.trim();
+  const el=$("kiFinResult"); el.innerHTML=`<div class="ki-loading">⚡ Generiere Finanzbericht…</div>`;
+  const now=new Date();
+  const offen=rechnungen.filter(r=>r.status==="offen");
+  const bezahlt=rechnungen.filter(r=>r.status==="bezahlt");
+  const umsatz=Math.round(kinder.reduce((s,k)=>s+monatlich(k),0));
+  const jahresHoch=now.getFullYear();
+  const totJahr=rechnungen.filter(r=>r.datum&&r.datum.startsWith(String(jahresHoch))).reduce((s,r)=>s+(r.betrag||0),0);
+  const sys=KITA_KONTEXT()+` Du erstellst Finanzberichte für Kita-Leitungen und Trägerschaften in der Schweiz. Klar strukturiert, alle relevanten Kennzahlen.`;
+  const usr=`Erstelle einen Finanzbericht für "${KITA.name}" für den Empfänger: ${empf}.
+
+Kennzahlen (aktuell):
+- Kinder: ${kinder.length} (${subvList().length} subv., ${kinder.filter(k=>!k.subv).length} privat)
+- Monatsumsatz (SOLL): CHF ${umsatz.toLocaleString("de-CH")}
+- Rechnungen offen: ${offen.length} × CHF ${Math.round(offen.reduce((s,r)=>s+(r.betrag||0),0)).toLocaleString("de-CH")}
+- Rechnungen bezahlt: ${bezahlt.length} × CHF ${Math.round(bezahlt.reduce((s,r)=>s+(r.betrag||0),0)).toLocaleString("de-CH")}
+- Jahresumsatz ${jahresHoch} bisher: CHF ${Math.round(totJahr).toLocaleString("de-CH")}
+- Auslastung: ${Math.round(kinder.length/20*100)}%
+- Warteliste: ${warteliste.length} Kinder
+${hinweis?"Besondere Hinweise: "+hinweis:""}
+
+Erstelle einen strukturierten 1-Seite Bericht mit:
+1. Zusammenfassung (Executive Summary)
+2. Belegung und Auslastung
+3. Finanzkennzahlen
+4. Offene Posten / Risiken
+5. Ausblick und Empfehlungen
+
+Für Empfänger: ${empf}. Sprache und Detailtiefe entsprechend anpassen.`;
+  const result=await groqCall(sys,usr,t=>{el.innerHTML=`<div class="ki-output">${t.replace(/
+/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div><div class="ki-actions"><button class="btn-xs primary" onclick="_kiDruckText('kiFinResult')">🖨️ Drucken</button><button class="btn-xs slate" onclick="_kiKopieren('kiFinResult')">📋 Kopieren</button></div>`;});
+  if(!result)el.innerHTML="";
 };
 
 // KI Hilfsfunktionen
+
 window._kiKopieren=id=>{
   const el=$(id); const text=el.querySelector(".ki-output")?.innerText||"";
   navigator.clipboard.writeText(text).then(()=>{ const btn=event.target; const old=btn.textContent; btn.textContent="✅ Kopiert!"; setTimeout(()=>btn.textContent=old,2000); });
@@ -2645,8 +3412,396 @@ window._kiDruckText=(id)=>{
   setTimeout(()=>{try{w.print();}catch(e){}},500);
 };
 
+// ── MEDIKAMENTENGABE-PROTOKOLL ────────────────────────────
+function renderMedikamente() {
+  const heute = new Date().toISOString().slice(0,10);
+  const heuteM = medikamente.filter(m=>m.datum===heute);
+  const rows=[...medikamente].sort((a,b)=>b.datum?.localeCompare(a.datum||"")||0).map((m,i)=>`
+    <tr>
+      <td class="cell-sub">${fmtDate(m.datum)} ${m.zeit||""}</td>
+      <td class="cell-main">${m.kindName||"–"}</td>
+      <td class="fw6">${m.medikament||"–"}</td>
+      <td class="cell-sub">${m.dosis||"–"}</td>
+      <td class="cell-sub">${m.verabreicht||"–"}</td>
+      <td>${m.elternFreigabe?pill("Eltern ✓","green"):pill("Keine Freigabe","red")}</td>
+      <td class="cell-sub">${m.mitarbeiter||"–"}</td>
+      <td><div class="row-actions">
+        <button class="act-btn" onclick="_druckMedi('${m.id}')">🖨️</button>
+        <button class="act-btn danger" onclick="_deleteMedi('${m.id}')">🗑</button>
+      </div></td>
+    </tr>`).join("");
+  return `
+  <div class="section-intro">💊 <strong>Medikamentengabe</strong> — Jede Medikamentengabe muss protokolliert werden. Elternfreigabe schriftlich einholen (Haftungsschutz).</div>
+  ${statsGrid([
+    {icon:"💊",val:medikamente.length,lbl:"Total Protokolle"},
+    {icon:"📅",val:heuteM.length,lbl:"Heute",color:heuteM.length?"amber":"green"},
+    {icon:"✅",val:medikamente.filter(m=>m.elternFreigabe).length,lbl:"Mit Elternfreigabe",color:"green"},
+    {icon:"⚠️",val:medikamente.filter(m=>!m.elternFreigabe).length,lbl:"Ohne Freigabe",color:"red"},
+  ])}
+  <div class="toolbar">
+    <button class="btn-primary" onclick="_openMediModal()">+ Medikamentengabe erfassen</button>
+  </div>
+  <div class="table-card">
+    <table><thead><tr>${["Datum/Zeit","Kind","Medikament","Dosis","Verabreicht um","Elternfreigabe","Mitarbeiter/in",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows||emptyRow(8,"Keine Medikamentengaben erfasst.")}</tbody>
+  </table></div>`;
+}
+window._openMediModal = id=>{
+  const m=id?medikamente.find(x=>x.id===id):null;
+  const f=m||{datum:new Date().toISOString().slice(0,10),zeit:new Date().toTimeString().slice(0,5),kindId:"",medikament:"",dosis:"",verabreicht:"",elternFreigabe:false,mitarbeiter:"",begruendung:"",notizen:""};
+  openModal("mMedi","mediTitle",m?"Protokoll bearbeiten":"Medikamentengabe erfassen");
+  const sel=$("mediKind");
+  sel.innerHTML=`<option value="">– Kind wählen –</option>`+kinder.map(k=>`<option value="${k.id}" data-name="${k.name}"${f.kindId===k.id?" selected":""}>${k.name}</option>`).join("");
+  setFields({mediDatum:f.datum,mediZeit:f.zeit,mediMedikament:f.medikament,mediDosis:f.dosis,mediVerabreicht:f.verabreicht,mediEltern:f.elternFreigabe,mediMitarb:f.mitarbeiter,mediBegr:f.begruendung,mediNotiz:f.notizen||""});
+  $("mediSave").onclick=()=>{
+    const opt=sel.options[sel.selectedIndex];
+    _saveMedi({datum:$("mediDatum").value,zeit:$("mediZeit").value,kindId:sel.value,kindName:opt?.dataset.name||"",medikament:$("mediMedikament").value.trim(),dosis:$("mediDosis").value.trim(),verabreicht:$("mediVerabreicht").value,elternFreigabe:$("mediEltern").checked,mitarbeiter:$("mediMitarb").value.trim(),begruendung:$("mediBegr").value.trim(),notizen:$("mediNotiz").value.trim()},id||null);
+  };
+};
+window._druckMedi = id=>{
+  const m=medikamente.find(x=>x.id===id); if(!m)return;
+  const k=kinder.find(x=>x.id===m.kindId)||{};
+  const parts=[
+    "<!DOCTYPE html><html lang='de'><head><meta charset='UTF-8'><title>Medikamentenprotokoll<\/title>",
+    "<style>@page{size:A5;margin:12mm}*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:10pt;color:#111;line-height:1.5}",
+    ".hdr{display:flex;justify-content:space-between;padding-bottom:4mm;border-bottom:2pt solid #2563EB;margin-bottom:5mm}",
+    ".logo{font-size:13pt;font-weight:900;color:#2563EB}.badge{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:4px;font-size:8pt;font-weight:700}",
+    ".grid{display:grid;grid-template-columns:1fr 1fr;gap:3mm;margin-bottom:3mm}",
+    ".field label{font-size:7.5pt;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;display:block}",
+    ".field .val{font-size:10pt;font-weight:600;border-bottom:1pt solid #e2e8f0;padding:1mm 0;min-height:7mm}",
+    ".sig{display:grid;grid-template-columns:1fr 1fr;gap:6mm;margin-top:8mm}",
+    ".sig-line{border-top:1pt solid #111;padding-top:1.5mm;font-size:7.5pt;color:#64748b}",
+    "@media print{body{-webkit-print-color-adjust:exact}}<\/style><\/head><body>",
+    "<div class='hdr'><div><div class='logo'>💊 "+esc(KITA.name)+"<\/div><div style='font-size:8pt;color:#64748b'>Medikamentenprotokoll<\/div><\/div>",
+    "<div><div class='badge'>"+( m.elternFreigabe?"✅ ELTERN ERTEILT FREIGABE":"⚠️ KEINE FREIGABE")+"<\/div><br><div style='font-size:8pt;color:#64748b;text-align:right'>"+fmtDate(m.datum)+" "+( m.zeit||"")+"<\/div><\/div><\/div>",
+    "<div class='grid'>",
+    "<div class='field'><label>Kind<\/label><div class='val'>"+esc(m.kindName)+"<\/div><\/div>",
+    "<div class='field'><label>Geburtsdatum<\/label><div class='val'>"+fmtDate(k.geb)+"<\/div><\/div>",
+    "<div class='field'><label>Medikament<\/label><div class='val'>"+esc(m.medikament)+"<\/div><\/div>",
+    "<div class='field'><label>Dosis<\/label><div class='val'>"+esc(m.dosis)+"<\/div><\/div>",
+    "<div class='field'><label>Verabreicht um<\/label><div class='val'>"+esc(m.verabreicht)+"<\/div><\/div>",
+    "<div class='field'><label>Mitarbeiter\/in<\/label><div class='val'>"+esc(m.mitarbeiter)+"<\/div><\/div>",
+    "<\/div>",
+    "<div class='field' style='margin-bottom:3mm'><label>Begründung \/ Anweisung der Eltern<\/label><div class='val' style='min-height:10mm'>"+esc(m.begruendung)+"<\/div><\/div>",
+    "<div class='field'><label>Beobachtungen \/ Reaktion Kind<\/label><div class='val' style='min-height:10mm'>"+esc(m.notizen||"Keine auffälligen Reaktionen.")+"<\/div><\/div>",
+    "<div class='sig'><div class='sig-line'>Unterschrift Mitarbeiter\/in<\/div><div class='sig-line'>Unterschrift Elternteil (Bestätigung Freigabe)<\/div><\/div>",
+    "<div style='margin-top:6mm;font-size:7.5pt;color:#94a3b8;border-top:1pt solid #e2e8f0;padding-top:2mm'>"+esc(KITA.name)+" &bull; "+esc(KITA.strasse)+", "+KITA.plz+" "+esc(KITA.ort)+" &bull; "+fmtDate(m.datum)+"<\/div>",
+    "<\/body><\/html>"
+  ];
+  const w=window.open("","_blank"); w.document.write(parts.join("\n")); w.document.close();
+  setTimeout(()=>{try{w.print();}catch(e){}},600);
+};
+
+// ── AUFNAHME-CHECKLISTE ───────────────────────────────────
+const AUFNAHME_ITEMS=[
+  {id:"vertrag",label:"Betreuungsvertrag unterzeichnet",kat:"Administrativ"},
+  {id:"tarif",label:"Tarif und Zahlungsmodalitäten besprochen",kat:"Administrativ"},
+  {id:"iban",label:"Bankverbindung Eltern erhalten",kat:"Administrativ"},
+  {id:"subv",label:"Subventionsstatus geklärt (Gemeinde)",kat:"Administrativ"},
+  {id:"notfall1",label:"Notfallkontakt 1 erfasst",kat:"Sicherheit"},
+  {id:"notfall2",label:"Notfallkontakt 2 erfasst",kat:"Sicherheit"},
+  {id:"arzt",label:"Hausarzt / Kinderarzt notiert",kat:"Sicherheit"},
+  {id:"allergien",label:"Allergien und Unverträglichkeiten erfasst",kat:"Sicherheit"},
+  {id:"krankheiten",label:"Vorerkrankungen / Medikamente dokumentiert",kat:"Sicherheit"},
+  {id:"foto",label:"Fotoerlaubnis Eltern eingeholt",kat:"Datenschutz"},
+  {id:"dsgvo",label:"Datenschutzerklärung unterschrieben",kat:"Datenschutz"},
+  {id:"impressum",label:"Hausordnung ausgehändigt",kat:"Datenschutz"},
+  {id:"ewplan",label:"Eingewöhnungsplan besprochen (Berliner Modell)",kat:"Eingewöhnung"},
+  {id:"ewstart",label:"Eingewöhnungsstart-Datum festgelegt",kat:"Eingewöhnung"},
+  {id:"ewkontakt",label:"Bezugsperson für Eingewöhnung bestimmt",kat:"Eingewöhnung"},
+  {id:"schluessel",label:"Schlüssel / Zugangscode übergeben",kat:"Logistik"},
+  {id:"zeiten",label:"Bring- und Abholzeiten besprochen",kat:"Logistik"},
+  {id:"essensplan",label:"Essensplan und Menupreise erklärt",kat:"Logistik"},
+  {id:"kommunikation",label:"Kommunikationsweg festgelegt (WhatsApp/Mail)",kat:"Logistik"},
+  {id:"willkommen",label:"Willkommensbrief versandt",kat:"Logistik"},
+];
+function renderCheckliste() {
+  const kindFilter=window._checkKindFilter||"";
+  const kindSel=`<select class="search" style="flex:unset;min-width:200px" onchange="window._checkKindFilter=this.value;renderAll()">
+    <option value="">– Kind wählen –</option>
+    ${kinder.map(k=>`<option value="${k.id}"${kindFilter===k.id?" selected":""}>${k.name}</option>`).join("")}
+  </select>`;
+  let checkData={};
+  if(kindFilter){
+    const saved=checklisten.find(c=>c.kindId===kindFilter);
+    checkData=saved?.items||{};
+  }
+  const total=AUFNAHME_ITEMS.length;
+  const done=Object.values(checkData).filter(Boolean).length;
+  const kats=[...new Set(AUFNAHME_ITEMS.map(i=>i.kat))];
+  const katBlocks=kats.map(kat=>{
+    const items=AUFNAHME_ITEMS.filter(i=>i.kat===kat);
+    const katDone=items.filter(i=>checkData[i.id]).length;
+    return `<div class="table-card mb-4">
+      <div class="table-header">
+        <span class="table-title">${kat}</span>
+        ${pill(katDone+"/"+items.length,katDone===items.length?"green":"amber")}
+      </div>
+      <div style="padding:4px 0">
+        ${items.map(item=>`<label style="display:flex;align-items:center;gap:10px;padding:8px 16px;cursor:pointer;border-bottom:1px solid var(--border)" onclick="_toggleCheck('${kindFilter}','${item.id}',this)">
+          <input type="checkbox" ${checkData[item.id]?"checked":""} style="width:16px;height:16px;cursor:pointer" onchange="_toggleCheck('${kindFilter}','${item.id}',this.parentElement)"/>
+          <span style="font-size:13px;${checkData[item.id]?"text-decoration:line-through;color:var(--muted)":""}">${item.label}</span>
+          ${checkData[item.id]?`<span style="margin-left:auto;font-size:11px;color:var(--green)">✅</span>`:""}
+        </label>`).join("")}
+      </div>
+    </div>`;
+  }).join("");
+  return `
+  <div class="section-intro">📋 <strong>Aufnahme-Checkliste</strong> — Sicherstellt dass bei jedem neuen Kind alle administrativen, sicherheitsrelevanten und pädagogischen Schritte erledigt sind.</div>
+  <div class="toolbar">${kindSel}${kindFilter?`<button class="btn-secondary" onclick="_resetCheck('${kindFilter}')">↺ Zurücksetzen</button>`:""}
+  </div>
+  ${!kindFilter?`<div class="table-card" style="padding:40px;text-align:center"><div class="cell-sub">Bitte Kind wählen um die Checkliste zu sehen.</div></div>`:
+  `${statsGrid([
+    {icon:"✅",val:done,lbl:"Erledigt",color:"green"},
+    {icon:"⭕",val:total-done,lbl:"Noch offen",color:total-done>0?"amber":"green"},
+    {icon:"📊",val:Math.round(done/total*100)+"%",lbl:"Fortschritt",color:done===total?"green":"primary"},
+    {icon:"🎯",val:total,lbl:"Total Punkte"},
+  ])}
+  ${katBlocks}`}`;
+}
+window._toggleCheck=async(kindId,itemId,el)=>{
+  if(!kindId){alert("Bitte Kind wählen.");return;}
+  const saved=checklisten.find(c=>c.kindId===kindId);
+  const items={...(saved?.items||{})};
+  const cb=el.querySelector("input[type=checkbox]");
+  items[itemId]=cb?cb.checked:!items[itemId];
+  const k=kinder.find(x=>x.id===kindId);
+  await save("checklisten",saved?.id||"check_"+kindId,{kindId,kindName:k?.name||"",items});
+};
+window._resetCheck=async(kindId)=>{
+  if(!confirm("Checkliste zurücksetzen?"))return;
+  const saved=checklisten.find(c=>c.kindId===kindId);
+  if(saved) await save("checklisten",saved.id,{...saved,items:{}});
+};
+
+// ── ABSENZMELDUNGS-TRACKER (Dashboard Integration) ────────
+// Already in dashboard — adds to existing alerts in renderDashboard
+// Additional: standalone function for checking 3+ day absences
+function checkLangeAbsenzen() {
+  const heute=new Date().toISOString().slice(0,10);
+  const alerts=[];
+  kinder.forEach(k=>{
+    const recent=[...anwesenheiten].filter(a=>a.kindId===k.id).sort((a,b)=>b.datum.localeCompare(a.datum));
+    let konsAbw=0;
+    for(const a of recent){
+      if(a.status==="abwesend") konsAbw++;
+      else break;
+    }
+    if(konsAbw>=3) alerts.push({kind:k,tage:konsAbw});
+  });
+  return alerts;
+}
+
+// ── POLISHING: Better renderDashboard absenz alert ────────
+// Inject absenz check into dashboard stats section
+function getAbsenzAlerts() {
+  const alerts=checkLangeAbsenzen();
+  if(!alerts.length) return "";
+  return `<div class="dash-info-row" style="background:#fef3c7;border-radius:6px;padding:6px 8px;margin-top:4px">
+    <span class="dash-info-icon">😷</span>
+    <div>
+      <div style="font-size:12px;font-weight:600;color:var(--amber)">${alerts.length} Kind${alerts.length>1?"er":""} seit 3+ Tagen krank</div>
+      <div class="cell-sub">${alerts.map(a=>`${a.kind.name} (${a.tage}T)`).join(", ")}</div>
+    </div>
+    <button class="btn-xs slate" style="margin-left:auto" onclick="_setTab('anwesenheit')">→</button>
+  </div>`;
+}
+
+// ── KI: QUALITÄTSBERICHT ──────────────────────────────────
+window._kiQualitaetsbericht = async () => {
+  if(!getAiKey()){alert("Bitte API Key in KI-Einstellungen eingeben.");return;}
+  const now=new Date();
+  const jahr=now.getFullYear();
+  const umsatz=Math.round(kinder.reduce((s,k)=>s+monatlich(k),0));
+  const anwQ=anwesenheiten.length?Math.round(anwesenheiten.filter(a=>a.status==="anwesend").length/anwesenheiten.length*100):0;
+  const beobQ=beobachtungen.length;
+  const unfallQ=unfaelle.length;
+  const ewAbge=kinder.filter(k=>Number(dokumente.find(d=>d.typ==="eingewoehnung"&&d.kindId===k.id)?.phase||0)>=4).length;
+  const sys=KITA_KONTEXT()+` Du schreibst professionelle Qualitätsberichte für Kitas gemäss Schweizer Kita-Standards (QuaKi, kibesuisse). Strukturiert, evidenzbasiert, aussagekräftig.`;
+  const usr=`Schreibe einen Qualitätsbericht ${jahr} für "${KITA.name}" in ${KITA.ort}:\n\nKennzahlen:\n- Kinder: ${kinder.length}/20 Plätze (${Math.round(kinder.length/20*100)}% Auslastung)\n- Subventioniert: ${subvList().length} (${Math.round(subvList().length/Math.max(kinder.length,1)*100)}%)\n- Monatsumsatz: CHF ${umsatz.toLocaleString("de-CH")}\n- Anwesenheitsquote: ${anwQ}%\n- Beobachtungseinträge: ${beobQ}\n- Abgeschlossene Eingewöhnungen: ${ewAbge}/${kinder.length}\n- Unfallprotokolle: ${unfallQ}\n- Mitarbeiter aktiv: ${mitarbeiter.filter(m=>m.status==="aktiv").length}\n- Warteliste: ${warteliste.length} Kinder\n\nStruktur des Qualitätsberichts:\n1. Zusammenfassung / Management Summary\n2. Belegung und Nachfrage\n3. Qualität der Betreuung (Eingewöhnung, Beobachtungen)\n4. Sicherheit und Gesundheit\n5. Personal und Qualifikation\n6. Finanzen\n7. Entwicklungsziele ${jahr+1}\n\nSprache: Formell, Schweizer Hochdeutsch. Ca. 400 Wörter.`;
+  const win=window.open("","_blank","width=800,height=700");
+  win.document.write(`<html><head><meta charset='UTF-8'><style>body{font-family:'Helvetica Neue',Arial,sans-serif;padding:30px;max-width:700px;line-height:1.7}h2{color:#2563EB}pre{white-space:pre-wrap;font-family:inherit;font-size:13px}<\/style><\/head><body><h2>⚡ Qualitätsbericht ${jahr} wird generiert…</h2><div id="r"></div><\/body><\/html>`);
+  const result=await groqCall(sys,usr,t=>{
+    win.document.getElementById("r").innerHTML=`<div style="white-space:pre-wrap;font-size:13px;line-height:1.8">${t.replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")}</div>`;
+  });
+  if(result) win.document.body.innerHTML+=`<button onclick="window.print()" style="margin:15px 0;padding:10px 20px;background:#2563EB;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">🖨️ Als PDF drucken</button>`;
+};
+
+// ── KI: BESCHWERDEMANAGEMENT ──────────────────────────────
+window._kiBeschwerdeInline = async (beschwerdeText) => {
+  const out=$("kiBeschwerdeOut"), spin=$("kiBS");
+  if(!out)return;
+  const text=beschwerdeText||$("kiBeschwerdeText")?.value?.trim();
+  if(!text){alert("Bitte Beschwerde eingeben.");return;}
+  if(spin)spin.style.display="inline"; out.innerHTML="";
+  const sys=KITA_KONTEXT()+` Du verfasst professionelle, deeskalierend formulierte Antworten auf Beschwerden von Kita-Eltern. Empathisch, lösungsorientiert, klar.`;
+  const usr=`Verfasse eine professionelle Antwort auf folgende Elternbeschwerde:\n\n"${text}"\n\nAntwort soll:\n1. Verständnis zeigen (Empathie)\n2. Sachverhalt klar und neutral darstellen\n3. Lösung / nächste Schritte anbieten\n4. Gesprächsbereitschaft signalisieren\n5. Professionellen Abschluss haben\n\nAbsender: ${KITA.name}, ${KITA.ort}. Ton: verständnisvoll aber sachlich. Max. 200 Wörter.`;
+  const result=await groqCall(sys,usr,t=>{out.innerHTML=`<div class="ki-inline-out-text">${t.replace(/\n/g,"<br/>")}</div>`;});
+  if(spin)spin.style.display="none";
+  if(result) out.innerHTML+=`<div style="display:flex;gap:6px;margin-top:6px">
+    <button class="btn-xs primary" onclick="_kiAlsNachricht('${encodeURIComponent(result)}','Antwort auf Ihre Mitteilung')">→ In Kommunikation</button>
+    <button class="btn-xs primary" onclick="_kiDruckText('kiBeschwerdeOut')">🖨️</button>
+    <button class="btn-xs slate" onclick="_kiCopy(this,'kiBeschwerdeOut')">📋</button>
+  </div>`;
+};
+
+// ── CSV / JSON EXPORT ─────────────────────────────────────
+function renderExport() {
+  const collections = [
+    {id:"kinder",label:"👶 Kinder",data:kinder,count:kinder.length},
+    {id:"rechnungen",label:"🧾 Rechnungen",data:rechnungen,count:rechnungen.length},
+    {id:"anwesenheiten",label:"✅ Anwesenheiten",data:anwesenheiten,count:anwesenheiten.length},
+    {id:"nachrichten",label:"📬 Kommunikation",data:nachrichten,count:nachrichten.length},
+    {id:"mitarbeiter",label:"👤 Mitarbeiter",data:mitarbeiter,count:mitarbeiter.length},
+    {id:"warteliste",label:"⏳ Warteliste",data:warteliste,count:warteliste.length},
+    {id:"beobachtungen",label:"📋 Beobachtungen",data:beobachtungen,count:beobachtungen.length},
+    {id:"unfaelle",label:"⚠️ Unfallprotokolle",data:unfaelle,count:unfaelle.length},
+    {id:"medikamente",label:"💊 Medikamente",data:medikamente,count:medikamente.length},
+    {id:"essensplaene",label:"🍽️ Essensplan",data:essensplaene,count:essensplaene.length},
+    {id:"vertraege",label:"📄 Verträge",data:vertraege,count:vertraege.length},
+    {id:"kesb",label:"⚖️ KESB",data:kesb,count:kesb.length},
+  ];
+  const total=collections.reduce((s,c)=>s+c.count,0);
+  const cards=collections.map(c=>`
+    <div class="export-card">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:18px">${c.label.split(" ")[0]}</span>
+        <div style="flex:1"><div class="cell-main">${c.label.slice(2)}</div>
+        <div class="cell-sub">${c.count} Einträge</div></div>
+        ${c.count>0?`<div class="row-actions">
+          <button class="btn-xs primary" onclick="_exportCSV('${c.id}')">CSV</button>
+          <button class="btn-xs slate" onclick="_exportJSON('${c.id}')">JSON</button>
+        </div>`:`<span class="cell-sub">Leer</span>`}
+      </div>
+    </div>`).join("");
+  return `
+  <div class="section-intro">📦 <strong>Datenexport</strong> — Exportiere alle Daten als CSV (Excel-kompatibel) oder JSON (Backup). Alle Daten gehören dir und bleiben in deinem Firebase-Account.</div>
+  ${statsGrid([
+    {icon:"📊",val:total,lbl:"Datensätze total",color:"primary"},
+    {icon:"👶",val:kinder.length,lbl:"Kinder"},
+    {icon:"🧾",val:rechnungen.length,lbl:"Rechnungen"},
+    {icon:"✅",val:anwesenheiten.length,lbl:"Anwesenheitseinträge"},
+  ])}
+  <div class="toolbar">
+    <button class="btn-primary" onclick="_exportAllesCSV()">⬇️ Alles als CSV exportieren</button>
+    <button class="btn-secondary" onclick="_exportJSON('all')">💾 Vollbackup JSON</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px">${cards}</div>`;
+}
+
+function toCSV(data) {
+  if(!data||!data.length) return "";
+  const keys=[...new Set(data.flatMap(o=>Object.keys(o).filter(k=>k!=="id")))];
+  const rows=[keys.join(";"),...data.map(row=>keys.map(k=>{
+    const v=row[k]??'';
+    const s=Array.isArray(v)?v.join(", "):typeof v==="object"?JSON.stringify(v):String(v);
+    return '"'+s.replace(/"/g,'""')+'"';
+  }).join(";"))];
+  return '\uFEFF'+rows.join("\n"); // BOM for Excel
+}
+
+function downloadFile(content, filename, mime) {
+  const blob=new Blob([content],{type:mime});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+window._exportCSV = (col) => {
+  const map={kinder,rechnungen,anwesenheiten,nachrichten,mitarbeiter,warteliste,beobachtungen,unfaelle,medikamente,essensplaene,vertraege,kesb};
+  const data=map[col]||[];
+  if(!data.length){alert("Keine Daten.");return;}
+  downloadFile(toCSV(data),`${KITA.name}_${col}_${new Date().toISOString().slice(0,10)}.csv`,"text/csv;charset=utf-8");
+};
+window._exportJSON = (col) => {
+  if(col==="all"){
+    const backup={exportDatum:new Date().toISOString(),kita:KITA,kinder,tarife,rechnungen,anwesenheiten,nachrichten,dienstplaene,warteliste,ferien,dokumente,mitarbeiter,essensplaene,vertraege,beobachtungen,tagesstrukturen,einkaufslisten,unfaelle,kesb,medikamente,checklisten};
+    downloadFile(JSON.stringify(backup,null,2),`${KITA.name}_Backup_${new Date().toISOString().slice(0,10)}.json`,"application/json");
+  } else {
+    const map={kinder,rechnungen,anwesenheiten,nachrichten,mitarbeiter,warteliste,beobachtungen,unfaelle,medikamente,essensplaene,vertraege,kesb};
+    downloadFile(JSON.stringify(map[col]||[],null,2),`${KITA.name}_${col}_${new Date().toISOString().slice(0,10)}.json`,"application/json");
+  }
+};
+window._exportAllesCSV = () => {
+  const cols={Kinder:kinder,Rechnungen:rechnungen,Anwesenheiten:anwesenheiten,Mitarbeiter:mitarbeiter,Warteliste:warteliste,Beobachtungen:beobachtungen,Unfaelle:unfaelle,Medikamente:medikamente};
+  let combined="";
+  Object.entries(cols).forEach(([name,data])=>{
+    if(data.length) combined+=`\n=== ${name} ===\n`+toCSV(data)+"\n";
+  });
+  downloadFile('\uFEFF'+combined,`${KITA.name}_Export_${new Date().toISOString().slice(0,10)}.csv`,"text/csv;charset=utf-8");
+};
+
+// ── KI: PÄDAGOGISCHES KONZEPT ─────────────────────────────
+window._kiKonzept = async () => {
+  if(!getAiKey()){alert("Bitte API Key in KI-Einstellungen eingeben.");return;}
+  const win=window.open("","_blank","width=900,height=700");
+  win.document.write(`<html><head><meta charset='UTF-8'><style>body{font-family:'Helvetica Neue',Arial,sans-serif;padding:40px;max-width:750px;line-height:1.8;font-size:13pt}h1{color:#2563EB;font-size:22pt;margin-bottom:4px}h2{color:#1e40af;font-size:14pt;margin-top:24px;margin-bottom:8px;border-bottom:1pt solid #e2e8f0;padding-bottom:4px}p,div{margin-bottom:8px}pre{white-space:pre-wrap;font-family:inherit}<\/style><\/head><body><h1>⚡ Pädagogisches Konzept wird generiert…</h1><div id="r"><\/div><\/body><\/html>`);
+  const sys=KITA_KONTEXT()+` Du erstellst professionelle pädagogische Konzepte für Schweizer Kitas gemäss den Qualitätsrichtlinien von kibesuisse und dem Schweizer Rahmenplan für Bildung, Betreuung und Erziehung.`;
+  const usr=`Erstelle ein professionelles pädagogisches Konzept für "${KITA.name}" in ${KITA.ort}.\n\nRahmendaten:\n- Kapazität: 20 Plätze (aktuell ${kinder.length} Kinder)\n- Altersgruppe: 0–5 Jahre\n- Mitarbeiter: ${mitarbeiter.filter(m=>m.status==="aktiv").length} FTE\n- Eingewöhnungsmodell: Berliner Modell\n\nStruktur des Konzepts:\n1. Leitbild und Werte\n2. Betreuungsphilosophie (situationsorientierter Ansatz)\n3. Eingewöhnung (Berliner Modell)\n4. Tagesstruktur und Rituale\n5. Ernährung und Gesundheit\n6. Elternzusammenarbeit\n7. Team und Qualitätsentwicklung\n8. Raumgestaltung\n9. Inklusion und Vielfalt\n10. Datenschutz und Sicherheit\n\nCa. 600–800 Wörter. Professionell, Schweizer Hochdeutsch, konkret und lebendig.`;
+  const result=await groqCall(sys,usr,t=>{
+    win.document.getElementById("r").innerHTML=t.replace(/\n\n/g,"</p><p>").replace(/\n/g,"<br>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/^## (.*)/gm,"<h2>$1</h2>").replace(/^# (.*)/gm,"<h1>$1</h1>");
+  });
+  if(result){
+    win.document.body.innerHTML+=`<hr style="margin:30px 0"><button onclick="window.print()" style="padding:12px 24px;background:#2563EB;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">🖨️ Als PDF drucken</button>`;
+  }
+};
+
+// ── KI: ELTERNUMFRAGE ─────────────────────────────────────
+window._kiElternumfrage = async () => {
+  if(!getAiKey()){alert("Bitte API Key in KI-Einstellungen eingeben.");return;}
+  const typ=prompt("Umfrage-Typ:\n1 = Allgemeine Zufriedenheit\n2 = Eingewöhnung\n3 = Qualität\nZahl eingeben:","1");
+  const typen={"1":"Allgemeine Elternzufriedenheit","2":"Eingewöhnungserfahrung","3":"Qualität der Betreuung"};
+  const typLabel=typen[typ]||"Allgemeine Zufriedenheit";
+  const win=window.open("","_blank","width=800,height:650");
+  win.document.write(`<html><head><meta charset='UTF-8'><style>
+    @page{size:A4;margin:15mm}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:11pt;color:#111;padding:20px}
+    h1{color:#2563EB;font-size:16pt;margin-bottom:4px}
+    h2{font-size:11pt;font-weight:700;margin:16px 0 6px;color:#374151}
+    .q{margin-bottom:14px;padding-bottom:12px;border-bottom:1pt solid #f1f5f9}
+    .q-text{font-size:11pt;font-weight:500;margin-bottom:8px}
+    .scale{display:flex;gap:12px;align-items:center}
+    .scale-item{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:9pt}
+    .circle{width:22px;height:22px;border:1.5pt solid #cbd5e1;border-radius:50%}
+    .lines{border-bottom:1pt solid #cbd5e1;height:7mm;margin-top:4px}
+    .loading{color:#2563EB;font-style:italic}
+  <\/style><\/head><body>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2pt solid #2563EB;padding-bottom:10px;margin-bottom:16px">
+    <div><h1>🏡 ${esc(KITA.name)}<\/h1><div style="font-size:10pt;color:#64748b">Elternumfrage: ${typLabel} · ${new Date().getFullYear()}<\/div><\/div>
+    <div style="font-size:9pt;color:#94a3b8;text-align:right">${esc(KITA.strasse)}<br>${KITA.plz} ${esc(KITA.ort)}<\/div>
+  <\/div>
+  <p style="font-size:10pt;color:#64748b;margin-bottom:16px">Ihre Meinung ist uns wichtig. Bitte nehmen Sie sich 5 Minuten Zeit für diese Umfrage. Alle Angaben sind freiwillig und anonym.<\/p>
+  <div id="r"><div class="loading">⚡ Umfrage wird generiert…<\/div><\/div>
+  <\/body><\/html>`);
+  const sys=KITA_KONTEXT()+` Du erstellst professionelle Elternumfragen für Schweizer Kitas. Fragen sind klar, neutral, gut strukturiert.`;
+  const usr=`Erstelle eine Elternumfrage zum Thema "${typLabel}" für "${KITA.name}".\n\nFormat für jede Frage:\n**Kategorie**\nFrage 1: [Fragetext]\n☐ Sehr zufrieden  ☐ Zufrieden  ☐ Neutral  ☐ Unzufrieden  ☐ Sehr unzufrieden\n\nBei offenen Fragen:\nFrage X: [Fragetext]\n_______________________________________\n\n15 Fragen total:\n- 10 Skalenfragen (Bewertung 1–5)\n- 3 Ja/Nein Fragen\n- 2 offene Fragen\n\nKategorien: Kommunikation, Betreuungsqualität, Eingewöhnung, Personal, Räumlichkeiten, Allgemein\nSprache: Schweizer Hochdeutsch, Du-Form mit Eltern.`;
+  const result=await groqCall(sys,usr,t=>{
+    win.document.getElementById("r").innerHTML=t
+      .replace(/\*\*(.*?)\*\*/g,'<h2>$1<\/h2>')
+      .replace(/^(Frage \d+:.*)/gm,'<div class="q"><div class="q-text">$1<\/div>')
+      .replace(/(☐ [^\n☐]+)/g,'<span style="margin-right:16px">$1<\/span>')
+      .replace(/_{10,}/g,'<div class="lines"><\/div>')
+      .replace(/<\/span>\n/g,'<\/span><br>')+'<\/div>';
+  });
+  if(result){
+    win.document.body.innerHTML+=`<div style="margin-top:20px;padding-top:10px;border-top:1pt solid #e2e8f0;font-size:9pt;color:#94a3b8;display:flex;justify-content:space-between"><span>${esc(KITA.name)} &bull; ${esc(KITA.strasse)}, ${KITA.plz} ${esc(KITA.ort)}<\/span><span>Vielen Dank für Ihre Rückmeldung!<\/span><\/div>
+    <button onclick="window.print()" style="position:fixed;bottom:20px;right:20px;padding:12px 24px;background:#2563EB;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.15)">🖨️ Als PDF drucken</button>`;
+  }
+};
+
 // ── SHOW/HIDE ─────────────────────────────────────────────
 
+function toast(msg,type="success"){
+  const t=document.createElement("div");
+  t.className="toast toast-"+type;
+  t.textContent=msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>t.classList.add("show"));
+  setTimeout(()=>{t.classList.remove("show");setTimeout(()=>t.remove(),300);},2500);
+}
 function showLogin(){$("loginScreen").style.display="flex";$("appScreen").style.display="none";}
 function showApp(){$("loginScreen").style.display="none";$("appScreen").style.display="block";$("userEmail").textContent=currentUser.email;loadGroqKey();}
 </script>
@@ -2807,10 +3962,7 @@ body {
 .login-btn:active { transform: translateY(0); }
 #loginErr { color: var(--red); font-size: 12px; margin-top: 8px; min-height: 16px; }
 
-@media (max-width: 900px) {
-  .login-left { display: none; }
-  .login-right { width: 100%; min-width: 0; background: linear-gradient(145deg,#5B3FE8,#7B61FF); }
-}
+
 
 /* ── APP SHELL ──────────────────────────────────────────── */
 #appScreen { display: none; }
@@ -2840,31 +3992,37 @@ body {
 .sidebar-logo-sub  { font-size: 10px; color: var(--muted); }
 
 #sidebarNav { flex: 1; padding: 8px 8px; }
-.nav-group  { margin-bottom: 4px; }
-.nav-group-label {
-  font-size: 10px; font-weight: 700; color: var(--muted);
-  text-transform: uppercase; letter-spacing: .7px;
-  padding: 10px 9px 4px;
+.nav-group-wrap { margin-bottom: 1px; }
+.nav-group-btn {
+  display: flex; align-items: center; gap: 7px;
+  width: 100%; padding: 6px 9px;
+  border: none; background: none;
+  color: var(--muted); border-radius: var(--radius-sm);
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .6px;
+  cursor: pointer; font-family: inherit; transition: all .12s;
 }
+.nav-group-btn:hover   { background: var(--bg); color: var(--text-2); }
+.nav-group-btn.has-active { color: var(--primary); }
+.nav-group-icon  { font-size: 13px; flex-shrink: 0; }
+.nav-group-label { flex: 1; text-align: left; }
+.nav-group-arrow { font-size: 9px; opacity: .55; }
+.nav-sub         { padding-left: 4px; }
+.nav-sub-item    { padding-left: 14px !important; }
 .nav-item {
-  display: flex; align-items: center; gap: 9px;
-  width: 100%; padding: 7px 9px;
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 6px 9px;
   border: none; background: none;
   color: var(--text-2);
-  border-radius: var(--radius-xs);
-  font-size: 13px; font-weight: 500;
-  cursor: pointer; text-align: left; font-family: inherit;
-  transition: all .12s;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px; font-weight: 500;
+  cursor: pointer; text-align: left;
+  font-family: inherit; transition: all .1s;
 }
-.nav-item:hover { background: var(--bg); color: var(--text); }
-.nav-item.active {
-  background: var(--primary-soft);
-  color: var(--primary);
-  font-weight: 600;
-}
+.nav-item:hover  { background: var(--bg); color: var(--text); }
+.nav-item.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
+.nav-icon-emoji  { font-size: 13px; flex-shrink: 0; width: 18px; text-align: center; }
 .nav-icon { width: 15px; height: 15px; flex-shrink: 0; opacity: .65; }
-.nav-item.active .nav-icon { opacity: 1; }
-.nav-item.active svg { color: var(--primary); }
 .nav-label { flex: 1; }
 .nav-badge {
   background: var(--red); color: #fff;
@@ -2890,6 +4048,7 @@ body {
 /* ── MAIN AREA ──────────────────────────────────────────── */
 .main-area {
   margin-left: var(--sidebar-w);
+  transition: margin-left .2s ease;
   flex: 1; display: flex; flex-direction: column;
   min-height: 100vh;
 }
@@ -3124,7 +4283,7 @@ td .cell-sub { margin-top: 0; }
 .star-btn:hover { color: #F5A623; }
 
 /* ── ESSENSPLAN ─────────────────────────────────────────── */
-.essen-week { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; padding: 12px 16px; }
+.essen-week { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap: 8px; padding: 12px 16px; }
 .essen-col  { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; min-height: 90px; transition: box-shadow .1s; }
 .essen-col:hover { box-shadow: var(--shadow-xs); }
 .essen-col.today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
@@ -3162,7 +4321,7 @@ td .cell-sub { margin-top: 0; }
 .komm-date{ font-size: 10px; font-weight: 600; color: var(--muted); min-width: 36px; }
 
 /* ── DIENSTPLAN ─────────────────────────────────────────── */
-.week-grid  { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; }
+.week-grid  { display: grid; grid-template-columns: repeat(auto-fit,minmax(120px,1fr)); gap: 8px; }
 .week-col   { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
 .week-col.today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
 .week-hdr   { padding: 8px 10px; background: #FAFBFD; font-size: 11.5px; font-weight: 600; text-align: center; border-bottom: 1px solid var(--border); color: var(--text-2); }
@@ -3182,7 +4341,7 @@ td .cell-sub { margin-top: 0; }
 .prog-fill  { height: 100%; border-radius: 3px; }
 
 /* ── TAGESSTRUKTUR ──────────────────────────────────────── */
-.tages-week { display: grid; grid-template-columns: repeat(5,minmax(160px,1fr)); gap: 8px; min-width: 820px; }
+.tages-week { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 8px; overflow-x:auto; }
 .tages-col  { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
 .tages-col-hdr { padding: 8px 10px; background: #FAFBFD; font-size: 11.5px; font-weight: 600; text-align: center; border-bottom: 1px solid var(--border); color: var(--primary); }
 .tages-slot { padding: 7px 10px; border-bottom: 1px solid var(--border); transition: background .1s; }
@@ -3242,7 +4401,16 @@ td .cell-sub { margin-top: 0; }
 .btn-cancel { padding: 10px 16px; background: none; color: var(--muted); border: 1.5px solid var(--border-2); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; cursor: pointer; transition: all .12s; }
 .btn-cancel:hover { background: var(--bg); color: var(--text-2); }
 
-/* ── KI-ASSISTENT ────────────────────────────────────────── */
+
+  .ki-inline-panel      { background:linear-gradient(135deg,#f0f4ff,#f8fafc);border:1px solid var(--primary-mid);border-radius:var(--radius);padding:16px;margin:12px 0; }
+  .ki-inline-title      { font-size:12.5px;font-weight:700;color:var(--primary);margin-bottom:10px;display:flex;align-items:center;gap:6px; }
+  .ki-inline-out        { }
+  .ki-inline-out-text   { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-size:12px;line-height:1.7;color:var(--text);white-space:pre-wrap;max-height:280px;overflow-y:auto;margin-top:8px; }
+  .ki-inline-locked     { background:var(--bg);border:1px dashed var(--border-2);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;margin:8px 0; }
+  .ki-btn-sm            { background:linear-gradient(135deg,var(--primary),#60a5fa);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:opacity .15s; }
+  .ki-btn-sm:hover      { opacity:.88; }
+
+  /* ── KI-ASSISTENT ────────────────────────────────────────── */
 .ki-header     { display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px;flex-wrap:wrap; }
 .ki-title      { font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.4px; }
 .ki-grid       { display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px; }
@@ -3279,22 +4447,40 @@ td .cell-sub { margin-top: 0; }
 
 /* ── RESPONSIVE ─────────────────────────────────────────── */
 .checked-row td { opacity: .5; }
-@media (max-width: 1024px) {
-  :root { --sidebar-w: 68px; }
-  .nav-group-label, .sidebar-logo-text, .sidebar-logo-sub, #userEmail, .logout-btn span:not(:first-child) { display: none; }
-  .nav-item { flex-direction: column; justify-content: center; align-items: center; padding: 7px 4px; gap: 3px; }
-  .nav-label { display: block !important; font-size: 9px; font-weight: 600; text-align: center; line-height: 1.2; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .nav-icon { width: 18px; height: 18px; }
-  .nav-badge { display: none; }
-  .sidebar-logo { justify-content: center; padding: 14px 4px; }
-  .sidebar-logo-icon { font-size: 22px; }
-}
-@media (max-width: 700px) {
-  .form-grid { grid-template-columns: 1fr; }
-  .field.full { grid-column: 1; }
-  .stats-grid { grid-template-columns: 1fr 1fr; }
-  main { padding: 12px 12px 60px; }
-  .topbar { padding: 0 12px; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ── PRINT STYLES ──────────────────────────────── */
+
+  /* ── SUB-TABS ──────────────────────────────────────────── */
+  .sub-tabs       { display:flex;gap:4px;margin-bottom:16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px;flex-wrap:wrap; }
+  .sub-tab        { padding:6px 14px;border:none;border-radius:6px;background:none;font-family:inherit;font-size:12.5px;font-weight:500;color:var(--muted);cursor:pointer;transition:all .12s;white-space:nowrap; }
+  .sub-tab:hover  { background:var(--surface);color:var(--text); }
+  .sub-tab.active { background:var(--surface);color:var(--primary);font-weight:700;box-shadow:var(--shadow-xs); }
+
+  /* ── TOAST ─────────────────────────────────────────────── */
+  .toast          { position:fixed;bottom:20px;right:20px;z-index:9999;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transform:translateY(8px);transition:all .25s;box-shadow:var(--shadow);max-width:300px; }
+  .toast.show     { opacity:1;transform:translateY(0); }
+  .toast-success  { background:#16a34a;color:#fff; }
+  .toast-error    { background:var(--red);color:#fff; }
+  .toast-info     { background:var(--primary);color:#fff; }
+
+  @media print {
+  .sidebar, .topbar, .toolbar, .row-actions, .act-btn, .btn-primary, .btn-secondary { display: none !important; }
+  .main-area { margin-left: 0; }
+  main { padding: 0; }
+  .table-card { box-shadow: none; border: 1pt solid #e2e8f0; }
+  .stat-card  { box-shadow: none; border: 1pt solid #e2e8f0; }
 }
 </style>
 </head>
@@ -3378,8 +4564,11 @@ td .cell-sub { margin-top: 0; }
   </nav>
   <div class="main-area">
     <div class="topbar">
-      <div id="topbarTitle">Belegung</div>
+      <div id="topbarTitle">Dashboard</div>
+      <div style="flex:1"></div>
       <div id="statBar"></div>
+      <button class="topbar-icon-btn" title="Vollbild" onclick="document.documentElement.requestFullscreen?.()">⛶</button>
+      <button class="topbar-icon-btn" title="Einstellungen" onclick="_openKitaSettings()">⚙️</button>
     </div>
     <main><div id="tabContent"></div></main>
   </div>
@@ -3815,6 +5004,29 @@ td .cell-sub { margin-top: 0; }
     <div class="modal-footer">
       <button class="btn-save" id="kesbSave">Speichern</button>
       <button class="btn-cancel" onclick="closeModal('mKesb')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: MEDIKAMENT -->
+<div class="modal-overlay" id="mMedi" onclick="if(event.target===this)closeModal('mMedi')">
+  <div class="modal-box" style="max-width:600px">
+    <div class="modal-title" id="mediTitle">Medikamentengabe erfassen</div>
+    <div class="form-grid">
+      <div class="field full"><label>Kind</label><select id="mediKind"></select></div>
+      <div class="field"><label>Datum</label><input id="mediDatum" type="date"/></div>
+      <div class="field"><label>Uhrzeit</label><input id="mediZeit" type="time"/></div>
+      <div class="field full"><label>Medikament</label><input id="mediMedikament" type="text" placeholder="z.B. Dafalgan Zäpfchen 250mg"/></div>
+      <div class="field"><label>Dosis / Menge</label><input id="mediDosis" type="text" placeholder="z.B. 1 Zäpfchen"/></div>
+      <div class="field"><label>Verabreicht um</label><input id="mediVerabreicht" type="time"/></div>
+      <div class="field"><label>Mitarbeiter/in</label><input id="mediMitarb" type="text" placeholder="Name der Person"/></div>
+      <div class="field"><label class="modal-check"><input id="mediEltern" type="checkbox"/> Elternfreigabe erteilt (mündlich/schriftlich)</label></div>
+      <div class="field full"><label>Begründung / Anweisung der Eltern</label><textarea id="mediBegr" placeholder="z.B. Bei Fieber über 38.5°C 1 Zäpfchen geben laut Anweisung Kinderarzt Dr. Müller"></textarea></div>
+      <div class="field full"><label>Beobachtungen / Reaktion Kind</label><textarea id="mediNotiz" placeholder="Reaktion nach Einnahme, Befinden…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="mediSave">Speichern & Protokoll erstellen</button>
+      <button class="btn-cancel" onclick="closeModal('mMedi')">Abbrechen</button>
     </div>
   </div>
 </div>
