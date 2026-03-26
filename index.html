@@ -5,7 +5,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏡</text></svg>"/>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 <meta http-equiv="Pragma" content="no-cache"/>
-<meta name="version" content="20260326-1369"/>
+<meta name="version" content="20260326-FIX680"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>KitaPlaner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -203,8 +203,12 @@ const KITA_COLORS = {
 
 // ── TABS ──────────────────────────────────────────────────
 let activeTab = "dashboard";
-window._setTab = t => { if(activeTab===t&&document.getElementById('tabContent')?.children.length){renderSidebar();renderTopbar();return;} activeTab=t; renderAll(); };
-window.closeModal = id => $(id)?.classList.remove("open");
+window._setTab = t => { 
+  console.log('[KitaPlaner] setTab:', t); 
+  activeTab=t; 
+  renderAll(); 
+};
+window.closeModal = id => { const m=$(id); if(m)m.style.display="none"; };
 
 // ── RENDER ENGINE ─────────────────────────────────────────
 function renderAll() {
@@ -1488,7 +1492,7 @@ function statsGrid(items){
   return`<div class="stats-grid">${items.map(i=>`<div class="stat-card"><div class="sc-icon">${i.icon}</div><div class="sc-val${i.color?" "+i.color:""}">${i.val}</div><div class="sc-lbl">${i.lbl}</div>${i.sub?`<div class="sc-sub">${i.sub}</div>`:""}</div>`).join("")}</div>`;
 }
 function emptyRow(cols,txt){return`<tr><td colspan="${cols}" style="text-align:center;padding:48px 20px;color:#94a3b8"><div style="font-size:32px;margin-bottom:10px">📭</div><div style="font-size:13px">${txt}</div></td></tr>`;}
-function openModal(id,titleId,title){$(titleId).textContent=title;$(id)?.classList.add("open");}
+function openModal(id,titleId,title){ const m=$(id); if(!m)return; if(titleId&&$(titleId))$(titleId).textContent=title; m.style.display="flex"; }
 function setFields(obj){for(const[k,v]of Object.entries(obj)){const el=$(k);if(!el)continue;if(el.type==="checkbox")el.checked=!!v;else el.value=v??"";}  }
 window.filterRows=(tbodyId,q)=>{const ql=q.toLowerCase();document.querySelectorAll(`#${tbodyId} tr`).forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(ql)?"":"none";});};
 
@@ -3108,7 +3112,7 @@ function getAbsenzAlerts(){
 
 // ── SHOW / HIDE ────────────────────────────────────────────
 function showLogin(){ $("loginScreen").style.display="flex"; $("appScreen").style.display="none"; }
-function showApp(){ $("loginScreen").style.display="none"; $("appScreen").style.display="block"; $("userEmail").textContent=currentUser.email; loadGroqKey(); }
+function showApp(){ $("loginScreen").style.display="none"; $("appScreen").style.display="block"; $("userEmail").textContent=currentUser.email; const av=$("userAvatar"); if(av)av.textContent=currentUser.email.slice(0,1).toUpperCase(); loadGroqKey(); setTimeout(()=>renderAll(),100); }
 
 </script>
 <style>
