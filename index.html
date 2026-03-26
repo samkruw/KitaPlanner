@@ -3642,6 +3642,102 @@ textarea { resize: vertical; min-height: 70px; }
   .main-area { margin-left:0; }
   main { padding:0; }
 }
+
+  /* ── MITARBEITER ──────────────────────────────────────── */
+  .ma-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px; }
+  .ma-card { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;display:flex;gap:14px;align-items:flex-start;box-shadow:var(--shadow-xs); }
+  .ma-av   { width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--pink));color:#fff;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+  .ma-stats{ display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px; }
+  .fs12    { font-size:12px; }
+
+  /* ── EINGEWÖHNUNG ─────────────────────────────────────── */
+  .ew-grid  { display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px; }
+  .ew-card  { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow-xs); }
+  .ew-phases{ display:flex;gap:4px;margin:12px 0; }
+  .ew-phase { flex:1;height:6px;border-radius:3px;background:var(--border); }
+  .ew-phase.done{ background:var(--green); }
+  .ew-phase.active{ background:var(--primary); }
+
+  /* ── ESSENSPLAN ───────────────────────────────────────── */
+  .essen-week{ display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px; }
+  .essen-day { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px; }
+  .essen-day-label{ font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px; }
+  .essen-main{ font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:4px; }
+  .essen-sub { font-size:11px;color:var(--muted); }
+
+  /* ── DIENSTPLAN ───────────────────────────────────────── */
+  .week-grid { display:grid;grid-template-columns:repeat(5,1fr);gap:8px; }
+  .week-day  { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px; }
+  .week-day-label{ font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:6px; }
+
+  /* ── TAGESSTRUKTUR ─────────────────────────────────────── */
+  .tages-week     { display:grid;grid-template-columns:repeat(5,1fr);gap:8px; }
+  .tages-col      { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden; }
+  .tages-col-head { background:var(--primary-light);padding:8px 10px;font-size:11px;font-weight:700;color:var(--primary); }
+  .tages-slot     { padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px; }
+  .tages-slot:last-child{ border-bottom:none; }
+  .tages-slot-row { display:flex;align-items:center;gap:8px; }
+
+  /* ── KALENDER ─────────────────────────────────────────── */
+  .kal-grid  { display:grid;grid-template-columns:repeat(7,1fr);gap:2px; }
+  .kal-cell  { background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:6px;min-height:36px;font-size:11px;cursor:pointer;transition:background .1s; }
+  .kal-cell:hover { background:var(--primary-light); }
+  .kal-cell.today { border-color:var(--primary);font-weight:700; }
+  .kal-cell.has-entry { background:var(--primary-light); }
+  .kal-head  { font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);padding:4px;text-align:center; }
+
+  /* ── BEOBACHTUNGEN ─────────────────────────────────────── */
+  .beob-card { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px;box-shadow:var(--shadow-xs); }
+  .beob-stars{ display:flex;gap:2px;margin:4px 0; }
+  .star      { font-size:14px;cursor:pointer; }
+
+  /* ── EINKAUFSLISTE ─────────────────────────────────────── */
+  .checked-row td { opacity:.5;text-decoration:line-through; }
+
+  /* ── INFO GRID ────────────────────────────────────────── */
+  .info-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px; }
+
+  /* ── WARTELISTE KARTE ──────────────────────────────────── */
+  .warte-card{ background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px; }
+
+  /* ── RECHNER ───────────────────────────────────────────── */
+  .rechner-box{ background:var(--primary-light);border:1px solid var(--primary-mid);border-radius:var(--radius);padding:20px;text-align:center; }
+  .rechner-result{ font-size:32px;font-weight:800;color:var(--primary);letter-spacing:-.5px; }
+
+  /* ── JAHRESABSCHLUSS ───────────────────────────────────── */
+  .ja-kpi { text-align:center;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-xs); }
+  .ja-val { font-size:28px;font-weight:800;color:var(--primary);letter-spacing:-.5px; }
+  .ja-lbl { font-size:12px;color:var(--muted);margin-top:4px; }
+
+  /* ── MODAL GRID VARIANT ────────────────────────────────── */
+  .modal-grid{ display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+
+  /* ── PROG-ROW ──────────────────────────────────────────── */
+  .prog-row  { display:flex;align-items:center;gap:8px; }
+  .prog-bg   { background:var(--border);border-radius:4px;height:6px;overflow:hidden;flex:1; }
+  .prog-fill { height:100%;border-radius:4px;background:var(--primary);transition:width .3s; }
+
+  /* ── SECTION COLORS ────────────────────────────────────── */
+  .text-green { color:var(--green); }
+  .text-red   { color:var(--red); }
+  .text-amber { color:var(--amber); }
+  .text-primary{ color:var(--primary); }
+  .bg-green   { background:var(--green-light); }
+  .bg-red     { background:var(--red-light); }
+  .bg-amber   { background:var(--amber-light); }
+
+  /* ── EMPTY ROWS ────────────────────────────────────────── */
+  .empty-row  { text-align:center;padding:48px 20px;color:var(--muted); }
+
+  /* ── FORECAST ──────────────────────────────────────────── */
+  .forecast-grid{ display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px; }
+  .fc-card{ background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;box-shadow:var(--shadow-xs); }
+  .fc-month{ font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase; }
+  .fc-val  { font-size:22px;font-weight:800;color:var(--text); }
+  .fc-sub  { font-size:11px;color:var(--muted);margin-top:2px; }
+
+  /* ── LOGIN EXTRA ───────────────────────────────────────── */
+  #loginScreen { display:flex;align-items:center;justify-content:center;min-height:100vh; }
 </style>
 </head>
 <body>
