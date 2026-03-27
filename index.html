@@ -1990,19 +1990,81 @@ window._addItemModal=id=>{
 };
 window._autoGenerieren=async(listId)=>{
   const l=einkaufslisten.find(x=>x.id===listId); if(!l)return;
-  const now=new Date(), sow=new Date(now);
+  if(!getAiKey()&&!getAiProvider().noKey){
+    // Fallback ohne KI: nur Menünamen als Artikel
+    const now=new Date(),sow=new Date(now);
+    sow.setDate(now.getDate()-((now.getDay()||7)-1));
+    const weekDates=[0,1,2,3,4].map(i=>{const d=new Date(sow);d.setDate(sow.getDate()+i);return d.toISOString().slice(0,10);});
+    const menus=essensplaene.filter(e=>weekDates.includes(e.datum));
+    if(!menus.length){alert("Keine Menüs für diese Woche erfasst.");return;}
+    const generated=[];
+    menus.forEach(m=>{
+      if(m.mittagessen) generated.push({name:m.mittagessen,menge:"",einheit:"",kat:"🥩 Fleisch & Fisch",notiz:fmtDate(m.datum),checked:false});
+      if(m.znueni) generated.push({name:m.znueni,menge:"",einheit:"",kat:"🧃 Getränke",notiz:"Znüni "+fmtDate(m.datum),checked:false});
+    });
+    const items=[...(l.items||[]),...generated];
+    await save("einkaufslisten",listId,{...l,items});
+    toast(generated.length+" Artikel hinzugefügt (ohne KI-Aufschlüsselung)","success");
+    return;
+  }
+  // KI-Version: Zutaten aufschlüsseln
+  const now=new Date(),sow=new Date(now);
   sow.setDate(now.getDate()-((now.getDay()||7)-1));
   const weekDates=[0,1,2,3,4].map(i=>{const d=new Date(sow);d.setDate(sow.getDate()+i);return d.toISOString().slice(0,10);});
   const menus=essensplaene.filter(e=>weekDates.includes(e.datum));
   if(!menus.length){alert("Keine Menüs für diese Woche erfasst.");return;}
-  const generated=[];
-  menus.forEach(m=>{
-    if(m.mittagessen) generated.push({name:m.mittagessen,menge:"",einheit:"",kat:"🥩 Fleisch & Fisch",notiz:`${fmtDate(m.datum)}`,checked:false});
-    if(m.znueni) generated.push({name:m.znueni,menge:"",einheit:"",kat:"🧃 Getränke",notiz:`Znüni ${fmtDate(m.datum)}`,checked:false});
-  });
-  const items=[...(l.items||[]),...generated];
-  await save("einkaufslisten",listId,{...l,items});
-  alert(`${generated.length} Artikel aus ${menus.length} Menüs hinzugefügt ✅`);
+
+  // Show loading state in button
+  const btn=document.querySelector(`[onclick="_autoGenerieren('${listId}')"]`);
+  if(btn){btn.disabled=true;btn.textContent="⚡ KI analysiert…";}
+
+  const menuText=menus.map(m=>{
+    const tag=new Date(m.datum).toLocaleDateString("de-CH",{weekday:"short",day:"numeric",month:"numeric"});
+    let t=tag+": "+m.mittagessen;
+    if(m.vegi) t+=" (Vegi-Option)";
+    if(m.znueni) t+=" | Znüni: "+m.znueni;
+    return t;
+  }).join("\n");
+
+  const personen=kinder.length||20;
+  const sys="Du bist ein Schweizer Kita-Koch-Assistent. Erstelle präzise Einkaufslisten mit realistischen Mengen.";
+  const prompt="Erstelle eine Einkaufsliste für "+personen+" Kinder (1-5 Jahre) für folgende Menüs:\n"+menuText+
+    "\n\nAntworte NUR mit einer JSON-Array, kein weiterer Text, kein Markdown:\n"+
+    "[{\"name\":\"Karotten\",\"menge\":\"2\",\"einheit\":\"kg\",\"kat\":\"🥬 Gemüse & Früchte\",\"notiz\":\"Montag Mittagessen\"},{...}]\n"+
+    "Kategorien NUR aus dieser Liste: \"🥩 Fleisch & Fisch\", \"🥬 Gemüse & Früchte\", \"🥛 Milchprodukte\", \"🍞 Brot & Backwaren\", \"🧃 Getränke\", \"🧂 Gewürze & Sonstiges\", \"🧹 Reinigung & Haushalt\"\n"+
+    "Mengen für "+personen+" Portionen. Nur Grundzutaten, keine Fertigprodukte. Schweizer Einheiten (kg, g, L, dl, Stk, Bund, Dose).";
+
+  try{
+    const r=await aiCall(sys,prompt,null); // no streaming — we need clean JSON
+    if(!r){if(btn){btn.disabled=false;btn.textContent="🍽️ Aus Menüplan generieren";}return;}
+
+    // Strip any markdown fences just in case
+    let clean=r.trim().replace(/^```json\s*/,"").replace(/^```\s*/,"").replace(/\s*```$/,"").trim();
+    // Find JSON array in response
+    const match=clean.match(/\[[\s\S]*\]/);
+    if(!match){throw new Error("Kein JSON-Array gefunden");}
+    const parsed=JSON.parse(match[0]);
+    if(!Array.isArray(parsed)||!parsed.length){throw new Error("Leere Liste");}
+
+    const VALID_KATS=["🥩 Fleisch & Fisch","🥬 Gemüse & Früchte","🥛 Milchprodukte","🍞 Brot & Backwaren","🧃 Getränke","🧂 Gewürze & Sonstiges","🧹 Reinigung & Haushalt"];
+    const newItems=parsed.map(p=>({
+      name:String(p.name||"").trim(),
+      menge:String(p.menge||"").trim(),
+      einheit:String(p.einheit||"").trim(),
+      kat:VALID_KATS.includes(p.kat)?p.kat:"🧂 Gewürze & Sonstiges",
+      notiz:String(p.notiz||"").trim(),
+      checked:false
+    })).filter(p=>p.name);
+
+    const items=[...(l.items||[]),...newItems];
+    await save("einkaufslisten",listId,{...l,items});
+    toast("🛒 "+newItems.length+" Zutaten aus "+menus.length+" Menüs übernommen!","success");
+    renderAll();
+  } catch(e){
+    console.error("KI Einkaufsliste:",e);
+    toast("KI-Fehler: "+e.message+". Bitte manuell ergänzen.","error");
+  }
+  if(btn){btn.disabled=false;btn.textContent="🍽️ Aus Menüplan generieren";}
 };
 window._druckEinkaufsliste=id=>{
   const l=einkaufslisten.find(x=>x.id===id); if(!l)return;
