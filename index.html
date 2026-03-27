@@ -1921,7 +1921,7 @@ function renderEinkaufsliste() {
   <div class="toolbar">
     <button class="btn-primary" onclick="_neueEinkaufsliste()">+ Neue Liste</button>
     ${aktiv?`<button class="btn-secondary" onclick="_addItemModal('${aktiv.id}')">+ Artikel hinzufügen</button>
-    <button class="btn-secondary" onclick="_autoGenerieren('${aktiv.id}')">🍽️ Aus Menüplan generieren</button>
+    <button class="btn-secondary" onclick="_autoGenerieren('${aktiv.id}')">⚡ Zutaten aus Menüplan</button>
     <button class="btn-secondary" onclick="_druckEinkaufsliste('${aktiv.id}')">🖨️ Drucken</button>`:""}
   </div>
   ${aktiv?`
@@ -2056,8 +2056,16 @@ window._autoGenerieren=async(listId)=>{
       checked:false
     })).filter(p=>p.name);
 
-    const items=[...(l.items||[]),...newItems];
-    await save("einkaufslisten",listId,{...l,items});
+    // Ask user if they want to replace or append
+    const existing=(l.items||[]).filter(x=>!x.checked);
+    let finalItems;
+    if(existing.length>0){
+      const replace=confirm("Die Liste enthält bereits "+existing.length+" Artikel.\n\nOK = Liste ersetzen (empfohlen)\nAbbrechen = Neue Zutaten hinzufügen");
+      finalItems=replace?newItems:[...(l.items||[]),...newItems];
+    } else {
+      finalItems=newItems;
+    }
+    await save("einkaufslisten",listId,{...l,items:finalItems});
     toast("🛒 "+newItems.length+" Zutaten aus "+menus.length+" Menüs übernommen!","success");
     renderAll();
   } catch(e){
