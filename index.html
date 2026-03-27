@@ -680,6 +680,7 @@ function renderVertraege() {
   <div class="toolbar">
     <button class="btn-primary" onclick="_openVertragModal()">+ Vertrag erstellen</button>
   </div>
+  ${kiPanelSimple("kiVertrag","Vertragsentwurf vorschlagen","Entwurf generieren","_kiVertragEntwurf()")}
   <div class="table-card">
     <table><thead><tr>${["Kind","Vertragsbeginn","Ende","Pensum","Monatsbeitrag","Status",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
     <tbody>${rows||emptyRow(7,"Noch keine Verträge.")}</tbody></table>
@@ -1288,6 +1289,13 @@ function renderWarteliste() {
       <button class="act-btn danger" onclick="_deleteWarte('${w.id}')">🗑</button>
     </div></td>
   </tr>`).join("");
+  const kiWarteRows=sorted.map((w,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span class="cell-main" style="flex:1">${w.name}${w.eltern?" · "+w.eltern:""}</span>
+      <button class="btn-xs primary" onclick="_kiWarteBrief('${w.id}','zusage')">✉️ Zusage</button>
+      <button class="btn-xs slate"   onclick="_kiWarteBrief('${w.id}','absage')">✉️ Absage</button>
+    </div>`).join("");
+
   return `
   ${statsGrid([
     {icon:"⏳",val:warteliste.length,lbl:"Auf Warteliste",color:"amber"},
@@ -1296,6 +1304,13 @@ function renderWarteliste() {
     {icon:"🆓",val:Math.max(0,20-kinder.length),lbl:"Freie Plätze"},
   ])}
   <div class="toolbar"><button class="btn-primary" onclick="_openWarteModal()">+ Auf Warteliste</button></div>
+  ${getAiKey()||getAiProvider().noKey?`
+  <div class="ki-inline-panel" style="margin-bottom:16px">
+    <div class="ki-inline-title">✉️ KI: Zusage / Absage-Brief</div>
+    <div class="cell-sub" style="margin-bottom:10px">Brief direkt für ein Kind aus der Warteliste generieren:</div>
+    ${sorted.length?`<div style="margin-bottom:8px">${kiWarteRows}</div>`:`<div class="cell-sub">Warteliste ist leer.</div>`}
+    <div id="kiWarteOut" class="ki-inline-out"></div>
+  </div>`:`<div class="ki-inline-panel ki-locked" style="margin-bottom:16px"><span style="font-size:16px">✉️</span><span class="cell-sub">KI-Briefe nach <button class="btn-xs slate" onclick="_setTab(&quot;ki&quot;)">API Key einrichten →</button></span></div>`}
   <div class="table-card">
     <table><thead><tr>${["Prio","Kind","Alter","Elternteil","Anmeldung","Gewünschter Eintritt","Bemerkung",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
     <tbody>${rows||emptyRow(8,"Warteliste ist leer.")}</tbody></table>
@@ -1774,6 +1789,7 @@ function renderTagesstruktur() {
     <button class="btn-primary" onclick="_openTagesModal()">+ Neuen Plan erstellen</button>
     ${aktivPlan?`<button class="btn-secondary" onclick="_openTagesModal('${aktivPlan.id}')">✏️ Aktuellen Plan bearbeiten</button>`:""}
   </div>
+  ${kiPanelSimple("kiTagesPlan","Wochenplan KI-Vorschlag","Wochenplan generieren","_kiTagesplanInline()")}
   ${aktivPlan?`
   <div class="table-card mb-4">
     <div class="table-header">
@@ -3048,6 +3064,68 @@ window._kiWillkommenInline=async(kindId,kindName)=>{
   win.document.write("<html><head><meta charset=\'UTF-8\'></head><body style=\'font-family:Arial;padding:20px\'><h2>📬 Willkommensbrief...</h2><div id=\'r\'></div></body></html>");
   const r=await groqCall(KITA_KONTEXT()+" Willkommensbriefe, warm und persoenlich.","Willkommensbrief fuer "+k.name+(k.geb?" ("+age(k.geb)+" Jahre)":"")+". Eltern: "+(k.eltern||"die Eltern")+". Eintritt: "+fmtDate(k.eintritt)+". Tage: "+(k.tage?.join(", ")||"-")+". Herzlich, persoenlich, Eingewoehnung erwaehnen. Max 200W.",t=>{ win.document.getElementById("r").innerHTML="<pre style=\'white-space:pre-wrap;font-family:Arial;font-size:13px\'>"+t+"</pre>"; });
   if(r)win.document.body.innerHTML+="<button onclick=\'window.print()\' style=\'margin:10px;padding:8px 16px;background:#2563EB;color:#fff;border:none;border-radius:6px;cursor:pointer\'>🖨️ Drucken</button>";
+};
+
+window._kiWarteBrief=async(warteId,typ)=>{
+  if(!getAiKey()&&!getAiProvider().noKey){alert("API Key eingeben.");return;}
+  const w=warteliste.find(x=>x.id===warteId); if(!w)return;
+  const out=$("kiWarteOut"); if(out)out.innerHTML="<div class=\"cell-sub\">⚡ Generiere "+typ+"…</div>";
+  const freie=Math.max(0,20-kinder.length);
+  const wartezeit=w.anmeldedatum?Math.round((new Date()-new Date(w.anmeldedatum))/86400000)+" Tage":"–";
+  const sys=KITA_KONTEXT()+" Elternbriefe, herzlich und professionell, Schweizer Hochdeutsch.";
+  const usr=typ==="zusage"
+    ?"Aufnahme-Zusage fuer "+w.name+(w.geb?" ("+age(w.geb)+" J.)":"")+" von "+KITA.name+". Eltern: "+(w.eltern||"die Eltern")+". Eintritt: "+fmtDate(w.gewuenscht)+". Betreuungstage: "+(w.tage?.join(", ")||"gemäss Vertrag")+". Wartezeit: "+wartezeit+". Struktur: Anrede, Freude ueber Aufnahme, Eintrittsdatum, Naechste Schritte (Vertrag, Eingewoehnung), Kontakt, Gruss. Max 200W."
+    :"Absage fuer "+w.name+(w.geb?" ("+age(w.geb)+" J.)":"")+" von "+KITA.name+". Eltern: "+(w.eltern||"die Eltern")+". Angemeldet: "+fmtDate(w.anmeldedatum)+". Freie Plaetze: "+freie+". Einfuehlsam, professionell, Warteliste erwaehnen, Tuer offen lassen. Max 150W.";
+  const r=await groqCall(sys,usr,t=>{if(out)out.innerHTML="<div class=\"ki-inline-out-text\">"+t.replace(/
+/g,"<br>")+"</div>";});
+  if(r&&out) out.insertAdjacentHTML("beforeend","<div class=\'ki-act\' style=\'margin-top:8px\'><button class=\'btn-xs slate\' onclick=\'_kiCopy(this,"kiWarteOut")\'> 📋 Kopieren</button> <button class=\'btn-xs slate\' onclick=\'_kiDruckText("kiWarteOut")\'> 🖨️ Drucken</button></div>");
+};
+
+window._kiVertragEntwurf=async()=>{
+  if(!getAiKey()&&!getAiProvider().noKey){alert("API Key eingeben.");return;}
+  _kiSpin("kiVertragSpin",true); _kiOut("kiVertragOut","");
+  const aktiv=vertraege.filter(v=>v.status==="aktiv");
+  const avg=aktiv.length?Math.round(aktiv.reduce((s,v)=>s+(Number(v.beitrag)||0),0)/aktiv.length):0;
+  const neuesteKinder=kinder.slice(-3).map(k=>k.name+"("+( k.geb?age(k.geb)+"J.":"?")+")").join(", ")||"–";
+  const r=await groqCall(KITA_KONTEXT()+" Betreuungsvertraege, Schweizer Recht, klar und vollstaendig.","Vertragsentwurf-Vorlage fuer "+KITA.name+". Aktive Vertraege: "+aktiv.length+", Ø Monatsbeitrag CHF "+avg+". Zuletzt aufgenommene Kinder: "+neuesteKinder+". Erstelle: 1. Kurze Vertragsstruktur (Pflichtpunkte CH: Beginn, Ende, Pensum, Beitrag, Kuendigung, Eingewoehnung, Verpflegung, Krankheit) 2. Muster-Klauseln fuer kritische Abschnitte 3. Hinweise Schweizer Recht (OR, FINV). Max 350W.",t=>{_kiOut("kiVertragOut","<div class=\"ki-inline-out-text\">"+t.replace(/
+/g,"<br>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>");});
+  _kiSpin("kiVertragSpin",false);
+  if(r) setTimeout(()=>{const el=$("kiVertragOut");if(el&&!el.querySelector(".ki-act"))el.insertAdjacentHTML("beforeend","<div class=\'ki-act\' style=\'margin-top:8px\'><button class=\'btn-xs slate\' onclick=\'_kiCopy(this,"kiVertragOut")\'> 📋 Kopieren</button> <button class=\'btn-xs slate\' onclick=\'_kiDruckText("kiVertragOut")\'> 🖨️ Drucken</button></div>");},100);
+};
+
+window._kiTagesplanInline=async()=>{
+  if(!getAiKey()&&!getAiProvider().noKey){alert("API Key eingeben.");return;}
+  _kiSpin("kiTagesPlanSpin",true); _kiOut("kiTagesPlanOut","");
+  const aktivPlan=[...tagesstrukturen].sort((a,b)=>b.datum?.localeCompare(a.datum||""))[0];
+  const slots=TAGES_SLOTS.map(s=>s.label.replace(/[🌅⭕🎨🍎🌳🍽️😴🎮🧃👋]/g,"").trim()).join(", ");
+  const alter=kinder.length?Math.round(kinder.filter(k=>k.geb).reduce((s,k)=>s+age(k.geb),0)/(kinder.filter(k=>k.geb).length||1)):3;
+  const r=await groqCall(KITA_KONTEXT()+" Paedagogische Tagesplaene, Berliner/Schweizer Kita-Standard, altersgerecht.","Wochenplan-Vorschlag fuer "+KITA.name+". Kinder: "+kinder.length+", Ø Alter: "+alter+" J. Zeitbloecke: "+slots+". Erstelle fuer jeden Block (Mo–Fr) einen konkreten Aktivitaetsvorschlag. Format: **Block** | Mo: ... | Di: ... | Mi: ... | Do: ... | Fr: ... Dann 3 paedagogische Begruendungen. Max 400W.",t=>{_kiOut("kiTagesPlanOut","<div class=\"ki-inline-out-text\">"+t.replace(/
+/g,"<br>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>");});
+  _kiSpin("kiTagesPlanSpin",false);
+  if(r) setTimeout(()=>{const el=$("kiTagesPlanOut");if(el&&!el.querySelector(".ki-act"))el.insertAdjacentHTML("beforeend","<div class=\'ki-act\' style=\'margin-top:8px\'><button class=\'btn-xs slate\' onclick=\'_kiCopy(this,"kiTagesPlanOut")\'> 📋 Kopieren</button> <button class=\'btn-xs slate\' onclick=\'_kiDruckText("kiTagesPlanOut")\'> 🖨️ Drucken</button></div>");},100);
+};
+
+window._kiEwAbschluss=async()=>{
+  if(!getAiKey()){alert("API Key eingeben.");return;}
+  _kiSpin("kiEwInlSpin",true); _kiOut("kiEwInlOut","");
+  const abgeschlossen=kinder.filter(k=>Number(dokumente.find(d=>d.typ==="eingewoehnung"&&d.kindId===k.id)?.phase||0)>=4);
+  const inGang=kinder.filter(k=>{const p=Number(dokumente.find(d=>d.typ==="eingewoehnung"&&d.kindId===k.id)?.phase||0);return p>0&&p<4;});
+  const nochNicht=kinder.filter(k=>!dokumente.find(d=>d.typ==="eingewoehnung"&&d.kindId===k.id));
+  const r=await groqCall(KITA_KONTEXT()+" Eingewoehnungsberichte nach Berliner Modell, FaBe-Sprache.","Eingewoehnungs-Abschlussbericht "+KITA.name+". Abgeschlossen: "+abgeschlossen.length+" Kinder ("+(abgeschlossen.map(k=>k.name).join(", ")||"-")+"). In Eingewoehnung: "+inGang.length+" ("+(inGang.map(k=>k.name).join(", ")||"-")+"). Noch nicht gestartet: "+nochNicht.length+". Abschnitte: 1.Zusammenfassung 2.Verlauf pro Phase 3.Erkenntnisse 4.Empfehlungen. Max 300W.",t=>{_kiOut("kiEwInlOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>");});
+  _kiSpin("kiEwInlSpin",false);
+  if(r) setTimeout(()=>{ const el=$("kiEwInlOut"); if(el&&!el.querySelector(".ki-act")) el.insertAdjacentHTML("beforeend","<div class='ki-act' style='margin-top:8px'><button class='btn-xs slate' onclick='_kiCopy(this,\"kiEwInlOut\")'>📋 Kopieren</button> <button class='btn-xs slate' onclick='_kiDruckText(\"kiEwInlOut\")'>🖨️ Drucken</button></div>"); },100);
+};
+
+window._kiKESBMeldung=async()=>{
+  if(!getAiKey()){alert("API Key eingeben.");return;}
+  _kiSpin("kiKESBInlSpin",true); _kiOut("kiKESBInlOut","");
+  const laufend=kesb.filter(k=>k.status!=="abgeschlossen");
+  const meldungen=kesb.filter(k=>k.typ==="Meldung");
+  const letzter=[...kesb].sort((a,b)=>b.datum?.localeCompare(a.datum||"")||0)[0];
+  const kontext=letzter?"Letzter Eintrag: "+letzter.kindName+" - "+letzter.typ+" - "+(letzter.beschreibung?.slice(0,80)||"-"):"Keine bestehenden Eintraege.";
+  const r=await groqCall(KITA_KONTEXT()+" KESB-Meldungen, Behoerdendeutsch CH, sachlich und praezise. Art. 314 ZGB.","KESB-Meldungs-Vorlage fuer "+KITA.name+". Aktuell: "+laufend.length+" laufende Faelle, "+meldungen.length+" Meldungen total. "+kontext+". Erstelle: 1.Meldungsvorlage (formell, sachlich) 2.Checkliste vor Einreichung 3.Hinweise Schweizer Recht. Max 300W.",t=>{_kiOut("kiKESBInlOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>");});
+  _kiSpin("kiKESBInlSpin",false);
+  if(r) setTimeout(()=>{ const el=$("kiKESBInlOut"); if(el&&!el.querySelector(".ki-act")) el.insertAdjacentHTML("beforeend","<div class='ki-act' style='margin-top:8px'><button class='btn-xs slate' onclick='_kiCopy(this,\"kiKESBInlOut\")'>📋 Kopieren</button> <button class='btn-xs slate' onclick='_kiDruckText(\"kiKESBInlOut\")'>🖨️ Drucken</button></div>"); },100);
 };
 
 window._kiAlsNachricht=(enc,betreff)=>{ const text=decodeURIComponent(enc); _setTab("kommunikation"); setTimeout(()=>{ _openNachrichtModal(null,null,"brief"); setTimeout(()=>{ if($("nmInhalt"))$("nmInhalt").value=text; if($("nmBetreff"))$("nmBetreff").value=decodeURIComponent(betreff); },100); },200); };
