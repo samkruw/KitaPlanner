@@ -834,6 +834,7 @@ function renderForecast() {
     <td class="fw6" style="color:#16a34a">CHF ${Math.round(d.umsatz).toLocaleString("de-CH")}</td>
   </tr>`).join("");
   return `
+  ${kiPanelSimple("kiForecast","KI: Umsatzprognose & Handlungsempfehlung","Prognose analysieren","_kiForecastInline()")}
   <div class="table-card mb-4">
     <div class="table-header"><span class="table-title">Belegung 24 Monate</span></div>
     <div style="overflow-x:auto;padding:16px 20px"><div class="chart-bars">${bars}</div></div>
@@ -1206,6 +1207,7 @@ function renderDienstplan() {
   return `
   ${subTabs("dienstplan",tabs)}
   <div class="toolbar"><button class="btn-primary" onclick="_openDienstModal()">+ Eintrag</button></div>
+  ${kiPanelSimple("kiDienstplan","KI: Wochenplan-Vorschlag","Schichtplan generieren","_kiDienstplanInline()")}
   <div class="table-card mb-4"><div class="table-header"><span class="table-title">Aktuelle Woche</span></div>
   <div class="week-grid" style="padding:12px">${grid}</div></div>
   <div class="table-card"><table><thead><tr>${["Datum","Mitarbeiter","Zeit","Aufgabe","Typ",""].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
@@ -2470,6 +2472,7 @@ function renderDashboard() {
           {label:"+ Vorfall erfassen",   icon:"⚠️", action:"_openUnfallModal()",     color:"red"},
           {label:"Kita-Einstellungen",   icon:"⚙️", action:"_openKitaSettings()",   color:"slate"},
           {label:"Wochenrückblick",       icon:"📝", action:"_kiWochenrueckblickInline()", color:"primary"},
+          {label:"Morgen-Briefing",        icon:"☀️", action:"_kiMorgenBriefing()",         color:"primary"},
         ].map(a=>`<button class="dash-quick-btn" onclick="${a.action}">
           <span style="font-size:16px">${a.icon}</span>
           <span style="font-size:12.5px;font-weight:600">${a.label}</span>
@@ -3265,6 +3268,110 @@ window._kiTagesplanInline=async()=>{
   },100);
 };
 
+window._kiDienstplanInline=async()=>{
+  if(!getAiKey()&&!getAiProvider().noKey){alert("API Key eingeben.");return;}
+  _kiSpin("kiDienstplanSpin",true); _kiOut("kiDienstplanOut","");
+  const aktiv=mitarbeiter.filter(m=>m.status==="aktiv");
+  const now=new Date(), sow=new Date(now);
+  sow.setDate(now.getDate()-((now.getDay()||7)-1));
+  const wd=["Mo","Di","Mi","Do","Fr"];
+  const days=wd.map((_,i)=>{const d=new Date(sow);d.setDate(sow.getDate()+i);return d.toISOString().slice(0,10);});
+  const bestehendeEintraege=dienstplaene.filter(d=>days.includes(d.datum));
+  const maList=aktiv.map(m=>m.name+(m.rolle?" ("+m.rolle+")":"")+(m.pensum?" "+m.pensum+"%":"")).join(", ")||"Keine Mitarbeiter erfasst";
+  const bestehendeText=bestehendeEintraege.length
+    ?bestehendeEintraege.map(d=>new Date(d.datum).toLocaleDateString("de-CH",{weekday:"short"})+": "+d.mitarbeiter+" "+d.von+"-"+d.bis).join(", ")
+    :"Noch keine Einträge diese Woche";
+  const betreuungsschluessel=aktiv.length>0?Math.round(kinder.length/aktiv.length*10)/10:0;
+  const r=await groqCall(
+    KITA_KONTEXT()+" Dienstplaene, Schweizer Kita-Arbeitsrecht, FaBe-Schluessel.",
+    "Wochenplan-Vorschlag fuer "+KITA.name+". Mitarbeiter: "+maList+". Kinder: "+kinder.length+
+    ", Betreuungsschluessel aktuell: 1:"+betreuungsschluessel+". Bestehende Eintraege: "+bestehendeText+
+    ". Oeffnungszeiten: 07:00-18:00. Erstelle: 1. Schichtplan Mo-Fr (08:00-17:00 / Frueh 07:00-16:00 / Spaet 09:00-18:00) pro Mitarbeiter"+
+    " 2. Hinweis ob Betreuungsschluessel (1:5) eingehalten 3. Empfehlungen. Format: **Tag:** Mitarbeiter - Schicht | ... Max 350W.",
+    t=>{_kiOut("kiDienstplanOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>");}
+  );
+  _kiSpin("kiDienstplanSpin",false);
+  if(r) setTimeout(()=>{
+    const el=$("kiDienstplanOut");
+    if(el&&!el.querySelector(".ki-act")) el.insertAdjacentHTML("beforeend",
+      "<div class='ki-act' style='margin-top:8px'><button class='btn-xs slate' onclick='_kiCopy(this,\"kiDienstplanOut\")'>📋 Kopieren</button> <button class='btn-xs slate' onclick='_kiDruckText(\"kiDienstplanOut\")'>🖨️ Drucken</button></div>");
+  },100);
+};
+
+window._kiForecastInline=async()=>{
+  if(!getAiKey()&&!getAiProvider().noKey){alert("API Key eingeben.");return;}
+  _kiSpin("kiForecastSpin",true); _kiOut("kiForecastOut","");
+  const now=new Date();
+  const months=Array.from({length:12},(_,i)=>{
+    const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+    const active=kinder.filter(k=>k.eintritt&&k.austritt&&new Date(k.eintritt)<=d&&new Date(k.austritt)>=d);
+    return{
+      label:d.toLocaleDateString("de-CH",{month:"short",year:"2-digit"}),
+      total:active.length,
+      umsatz:Math.round(active.reduce((s,k)=>s+monatlich(k),0)),
+      auslastung:Math.round(active.length/20*100)
+    };
+  });
+  const austritte=kinder.filter(k=>k.austritt&&k.austritt>now.toISOString().slice(0,10)).sort((a,b)=>a.austritt.localeCompare(b.austritt)).slice(0,5);
+  const aufWarte=warteliste.length;
+  const freie=Math.max(0,20-kinder.length);
+  const forecastText=months.map(m=>m.label+": "+m.total+" Kinder, "+m.auslastung+"%, CHF "+m.umsatz.toLocaleString("de-CH")).join(" | ");
+  const austrittText=austritte.length?austritte.map(k=>k.name+" ("+fmtDate(k.austritt)+")").join(", "):"Keine geplanten Austritte";
+  const r=await groqCall(
+    KITA_KONTEXT()+" Finanzprognosen, Schweizer Kita-Betriebswirtschaft.",
+    "Umsatzprognose-Analyse fuer "+KITA.name+". Prognose 12 Monate: "+forecastText+
+    ". Geplante Austritte: "+austrittText+". Warteliste: "+aufWarte+" Kinder. Freie Plaetze aktuell: "+freie+
+    ". Erstelle: 1. Executive Summary (3 Saetze) 2. Risikoanalyse (welche Monate kritisch unter 70% Auslastung)"+
+    " 3. Konkrete Handlungsempfehlungen (Warteliste aktivieren, Tarife, Marketing) 4. Umsatz-Ausblick. Max 350W.",
+    t=>{_kiOut("kiForecastOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>");}
+  );
+  _kiSpin("kiForecastSpin",false);
+  if(r) setTimeout(()=>{
+    const el=$("kiForecastOut");
+    if(el&&!el.querySelector(".ki-act")) el.insertAdjacentHTML("beforeend",
+      "<div class='ki-act' style='margin-top:8px'><button class='btn-xs slate' onclick='_kiCopy(this,\"kiForecastOut\")'>📋 Kopieren</button> <button class='btn-xs slate' onclick='_kiDruckText(\"kiForecastOut\")'>🖨️ Drucken</button></div>");
+  },100);
+};
+
+window._kiMorgenBriefing=async()=>{
+  if(!getAiKey()&&!getAiProvider().noKey){alert("API Key eingeben.");return;}
+  _kiOpenModal("☀️ Morgen-Briefing — "+new Date().toLocaleDateString("de-CH",{weekday:"long",day:"numeric",month:"long"}));
+  const today=new Date().toISOString().slice(0,10);
+  const anwH=anwesenheiten.filter(a=>a.datum===today);
+  const anwesend=anwH.filter(a=>a.status==="anwesend").map(a=>a.kindName).join(", ")||"Noch nicht erfasst";
+  const abwesend=anwH.filter(a=>a.status==="abwesend").map(a=>a.kindName).join(", ")||"–";
+  const offeneRech=rechnungen.filter(r=>r.status==="offen");
+  const ueberfaellig=offeneRech.filter(r=>r.faellig&&r.faellig<today);
+  const menu=essensplaene.find(e=>e.datum===today);
+  const diensteHeute=dienstplaene.filter(d=>d.datum===today);
+  const geburtstage=kinder.filter(k=>{
+    if(!k.geb)return false;
+    const g=new Date(k.geb);
+    return g.getDate()===new Date().getDate()&&g.getMonth()===new Date().getMonth();
+  }).map(k=>k.name);
+  const naechste7=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+  const baldGeburtstage=kinder.filter(k=>{
+    if(!k.geb||geburtstage.includes(k.name))return false;
+    const g=new Date(k.geb);
+    const next=new Date(new Date().getFullYear(),g.getMonth(),g.getDate());
+    if(next<new Date())next.setFullYear(new Date().getFullYear()+1);
+    return next.toISOString().slice(0,10)<=naechste7;
+  }).map(k=>k.name);
+  const r=await groqCall(
+    KITA_KONTEXT()+" Tagesbriefings, warm, motivierend, praegnant.",
+    "Morgen-Briefing fuer "+KITA.name+" am "+new Date().toLocaleDateString("de-CH",{weekday:"long",day:"numeric",month:"long",year:"numeric"})+
+    ". Anwesend ("+anwH.filter(a=>a.status==="anwesend").length+"/"+kinder.length+"): "+anwesend+
+    ". Abwesend: "+abwesend+
+    ". Mitarbeiter heute: "+(diensteHeute.map(d=>d.mitarbeiter).join(", ")||"Dienstplan nicht erfasst")+
+    ". Menue heute: "+(menu?"Mittag: "+menu.mittagessen+(menu.znueni?" | Znueni: "+menu.znueni:""):"Noch nicht geplant")+
+    ". Ueberfaellige Rechnungen: "+ueberfaellig.length+" (CHF "+Math.round(ueberfaellig.reduce((s,r)=>s+(r.betrag||0),0)).toLocaleString("de-CH")+")"+
+    (geburtstage.length?". 🎂 GEBURTSTAG HEUTE: "+geburtstage.join(", "):".")+
+    (baldGeburtstage.length?" Geburtstage bald: "+baldGeburtstage.join(", ")+".":" ")+
+    " Erstelle: 1. Herzlicher Tageseinstieg 2. Anwesenheits-Uebersicht 3. Heutiger Tag (Menue, Dienste) 4. Finanz-Alert falls noetig 5. Motivierender Abschluss. Max 250W.",
+    t=>_kiStreamToModal(t)
+  );
+};
+
 window._kiEwAbschluss=async()=>{
   if(!getAiKey()){alert("API Key eingeben.");return;}
   _kiSpin("kiEwInlSpin",true); _kiOut("kiEwInlOut","");
@@ -3438,8 +3545,318 @@ window._kiCopyModal = () => {
 function showLogin(){ $("loginScreen").style.display="flex"; $("appScreen").style.display="none"; }
 function showApp(){ $("loginScreen").style.display="none"; $("appScreen").style.display="block"; $("userEmail").textContent=currentUser.email; const av=$("userAvatar"); if(av)av.textContent=currentUser.email.slice(0,1).toUpperCase(); loadGroqKey(); setTimeout(()=>renderAll(),100); }
 
+// ═══════════════════════════════════════════════════════════
+//  KITA BUDDY — Interactive KI Assistant
+// ═══════════════════════════════════════════════════════════
+(function(){
+  let _open = false;
+  let _history = []; // {role, content}
+  let _greeted = false;
+  let _proactiveTimer = null;
+
+  const BUDDY_SYSTEM = ()=>`Du bist der KI Buddy von ${KITA.name}, einer Schweizer Kita. Du heisst "Buddy" 🐣.
+Du bist spielerisch, herzlich und hilfreich. Du nutzt Emojis. Du antwortest auf Schweizer Hochdeutsch.
+Du kennst alle Daten der App:
+- Kinder (${kinder.length}): ${kinder.slice(0,5).map(k=>k.name).join(", ")}${kinder.length>5?"...":""}
+- Mitarbeiter (${mitarbeiter.filter(m=>m.status==="aktiv").length} aktiv)
+- Rechnungen: ${rechnungen.filter(r=>r.status==="offen").length} offen, ${rechnungen.filter(r=>r.status==="offen"&&r.faellig&&r.faellig<new Date().toISOString().slice(0,10)).length} überfällig
+- Warteliste: ${warteliste.length} Kinder
+- Anwesenheit heute: ${anwesenheiten.filter(a=>a.datum===new Date().toISOString().slice(0,10)&&a.status==="anwesend").length} anwesend
+- Essensplan heute: ${essensplaene.find(e=>e.datum===new Date().toISOString().slice(0,10))?.mittagessen||"Noch nicht geplant"}
+- Aktive Module: Dashboard, Belegung, Anwesenheit, Essensplan, Rechnungen, Personal, Kommunikation, Protokolle, KI-Assistent
+
+AKTIONEN die du ausführen kannst (wenn der User etwas öffnen will, antworte mit einem JSON-Tag am Ende):
+- Tab öffnen: [ACTION:TAB:dashboard], [ACTION:TAB:belegung], [ACTION:TAB:anwesenheit], [ACTION:TAB:essensplan], [ACTION:TAB:rechnungen], [ACTION:TAB:kommunikation], [ACTION:TAB:dienstplan], [ACTION:TAB:mitarbeiter], [ACTION:TAB:ki], [ACTION:TAB:unfallprotokoll], [ACTION:TAB:medikamente], [ACTION:TAB:warteliste]
+- Kind erfassen: [ACTION:OPEN:kind]
+- Rechnung erstellen: [ACTION:OPEN:rechnung]
+- Morgen-Briefing: [ACTION:OPEN:briefing]
+
+Wenn der User eine Aktion will, erkläre kurz was du tust und füge den passenden ACTION-Tag ans Ende.
+Behalte die Antworten kurz (max 120 Wörter). Nutze Emojis sparsam aber gezielt.`;
+
+  const SUGGESTIONS_DEFAULT = [
+    "📊 Wie viele Kinder?",
+    "💰 Offene Rechnungen?",
+    "🍽️ Menü heute?",
+    "📅 Zum Dienstplan",
+    "☀️ Morgen-Briefing",
+    "👶 Kind erfassen",
+  ];
+
+  const SUGGESTIONS_AFTER = [
+    "📈 Forecast anzeigen",
+    "✅ Anwesenheit",
+    "⚡ KI-Einstellungen",
+    "📋 Protokolle",
+  ];
+
+  window._buddyToggle = ()=>{
+    _open = !_open;
+    const panel = document.getElementById("buddyPanel");
+    panel.classList.toggle("open", _open);
+    if(_open && !_greeted){ _buddyGreet(); _greeted=true; }
+    if(_open){ document.getElementById("buddyBadge").style.display="none"; }
+    if(_open) setTimeout(()=>document.getElementById("buddyInput")?.focus(), 200);
+  };
+
+  function _buddyGreet(){
+    const hour = new Date().getHours();
+    const gruss = hour<12?"Guten Morgen":hour<17?"Guten Tag":"Guten Abend";
+    const offene = rechnungen.filter(r=>r.status==="offen"&&r.faellig&&r.faellig<new Date().toISOString().slice(0,10)).length;
+    let msg = `${gruss}! 🐣 Ich bin dein Kita Buddy!\n\nIch kenne ${kinder.length} Kinder, ${mitarbeiter.filter(m=>m.status==="aktiv").length} Mitarbeiter und alle Daten der App.`;
+    if(offene>0) msg += `\n\n⚠️ Übrigens: Du hast ${offene} überfällige Rechnung${offene>1?"en":""}!`;
+    msg += `\n\nFrag mich alles oder klick auf eine Option 👇`;
+    _buddyAddMsg("bot", msg);
+    _showSuggestions(SUGGESTIONS_DEFAULT);
+  }
+
+  function _buddyAddMsg(role, text){
+    const msgs = document.getElementById("buddyMessages");
+    if(!msgs) return;
+    const div = document.createElement("div");
+    div.className = "buddy-msg " + role;
+    // Parse action tags out of text
+    const cleanText = text.replace(/\[ACTION:[A-Z]+:[a-z]+\]/g,"").trim();
+    div.innerHTML = `<div class="buddy-msg-avatar">${role==="bot"?"🐣":"👤"}</div><div class="buddy-bubble">${cleanText.replace(/\n/g,"<br>")}</div>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+    // Execute actions
+    const actions = [...text.matchAll(/\[ACTION:([A-Z]+):([a-z]+)\]/g)];
+    actions.forEach(([,type,val])=>{ setTimeout(()=>_buddyExecuteAction(type,val), 600); });
+    return div;
+  }
+
+  function _buddyShowTyping(){
+    const msgs = document.getElementById("buddyMessages");
+    const div = document.createElement("div");
+    div.className = "buddy-msg bot buddy-typing";
+    div.id = "buddyTyping";
+    div.innerHTML = `<div class="buddy-msg-avatar">🐣</div><div class="buddy-bubble"><div class="buddy-dot"></div><div class="buddy-dot"></div><div class="buddy-dot"></div></div>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function _buddyRemoveTyping(){
+    document.getElementById("buddyTyping")?.remove();
+  }
+
+  function _showSuggestions(chips){
+    const el = document.getElementById("buddySuggestions");
+    if(!el) return;
+    el.innerHTML = chips.map(c=>`<button class="buddy-chip" onclick="_buddySendText('${c.replace(/'/g,"")}')">${c}</button>`).join("");
+  }
+
+  window._buddySendText = (text)=>{
+    document.getElementById("buddyInput").value = text;
+    _buddySend();
+  };
+
+  window._buddySend = async()=>{
+    const input = document.getElementById("buddyInput");
+    const text = input?.value?.trim();
+    if(!text) return;
+    if(!getAiKey()&&!getAiProvider().noKey){
+      _buddyAddMsg("bot","⚠️ Kein API Key! Bitte zuerst in den KI-Einstellungen einrichten. [ACTION:TAB:ki]");
+      return;
+    }
+    input.value = "";
+    document.getElementById("buddySuggestions").innerHTML = "";
+    _buddyAddMsg("user", text);
+    _history.push({role:"user", content:text});
+    _buddyShowTyping();
+    document.getElementById("buddySendBtn").disabled = true;
+    try {
+      const prov = getAiProvider(), key = getAiKey(), model = getAiModel();
+      const messages = [
+        {role:"system", content: BUDDY_SYSTEM()},
+        ..._history.slice(-8) // keep last 8 turns for context
+      ];
+      const resp = await fetch(prov.url,{
+        method:"POST",
+        headers:{"Content-Type":"application/json",...(prov.extraHeaders||{}),
+          ...(!prov.noKey?{"Authorization":"Bearer "+key}:{})},
+        body:JSON.stringify({model, messages, temperature:0.75, max_tokens:400, stream:false})
+      });
+      const data = await resp.json();
+      const reply = data.choices?.[0]?.message?.content || "Hmm, da ist etwas schiefgelaufen 😅";
+      _history.push({role:"assistant", content:reply});
+      _buddyRemoveTyping();
+      _buddyAddMsg("bot", reply);
+      // Show follow-up suggestions
+      _showSuggestions(SUGGESTIONS_AFTER);
+    } catch(e){
+      _buddyRemoveTyping();
+      _buddyAddMsg("bot","❌ Fehler: "+e.message);
+    }
+    document.getElementById("buddySendBtn").disabled = false;
+  };
+
+  function _buddyExecuteAction(type, val){
+    if(type==="TAB"){ _setTab(val); }
+    else if(type==="OPEN"){
+      if(val==="kind"){ _openKindModal(); }
+      else if(val==="rechnung"){ _setTab("rechnungen"); setTimeout(()=>_openRechModal(),300); }
+      else if(val==="briefing"){ _kiMorgenBriefing(); }
+    }
+  }
+
+  // ── Proactive hints ─────────────────────────────────────────────────────────
+  function _checkProactiveHints(){
+    if(_greeted) return;
+    const today = new Date().toISOString().slice(0,10);
+    const hints = [];
+    const ueberfaellig = rechnungen.filter(r=>r.status==="offen"&&r.faellig&&r.faellig<today).length;
+    if(ueberfaellig>0) hints.push(`💸 ${ueberfaellig} Rechnung${ueberfaellig>1?"en":""} überfällig!`);
+    const keinMenu = !essensplaene.find(e=>e.datum===today);
+    if(keinMenu && new Date().getDay()>=1 && new Date().getDay()<=5) hints.push("🍽️ Kein Menü für heute geplant!");
+    const geburtstage = kinder.filter(k=>{
+      if(!k.geb)return false;
+      const g=new Date(k.geb);
+      return g.getDate()===new Date().getDate()&&g.getMonth()===new Date().getMonth();
+    });
+    if(geburtstage.length) hints.push(`🎂 Heute hat ${geburtstage[0].name} Geburtstag!`);
+    if(hints.length>0){
+      const badge = document.getElementById("buddyBadge");
+      if(badge){ badge.style.display="flex"; badge.textContent=hints.length; }
+    }
+  }
+
+  // Run proactive check after data loads
+  setTimeout(()=>_checkProactiveHints(), 3000);
+
+  // Expose for external calls
+  window._buddyProactiveHint = (msg)=>{
+    const badge = document.getElementById("buddyBadge");
+    if(badge){ badge.style.display="flex"; badge.textContent="!"; }
+    if(_open){ _buddyAddMsg("bot","💡 "+msg); }
+  };
+
+})();
+
 </script>
 <style>
+
+/* ═══════════════════════════════════════════════════
+   KITA BUDDY
+═══════════════════════════════════════════════════ */
+#buddyBtn {
+  position: fixed; bottom: 24px; right: 24px; z-index: 900;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  box-shadow: 0 4px 20px rgba(123,104,238,.45);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: transform .2s, box-shadow .2s;
+  user-select: none;
+}
+#buddyBtn:hover { transform: scale(1.1); box-shadow: 0 6px 28px rgba(123,104,238,.6); }
+#buddyAvatar { font-size: 26px; position: relative; z-index: 1; }
+#buddyPulse {
+  position: absolute; width: 56px; height: 56px; border-radius: 50%;
+  background: rgba(123,104,238,.3); animation: buddyPulse 2.5s ease-out infinite;
+}
+@keyframes buddyPulse {
+  0%   { transform: scale(1);   opacity: .7; }
+  70%  { transform: scale(1.6); opacity: 0;  }
+  100% { transform: scale(1.6); opacity: 0;  }
+}
+#buddyBadge {
+  position: absolute; top: -2px; right: -2px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #ef4444; color: #fff; font-size: 10px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--bg);
+}
+#buddyPanel {
+  position: fixed; bottom: 90px; right: 20px; z-index: 901;
+  width: 360px; max-height: 540px;
+  background: var(--card); border-radius: 18px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.18);
+  display: none; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--border);
+  animation: buddySlideIn .25s ease;
+}
+@keyframes buddySlideIn {
+  from { opacity:0; transform: translateY(16px) scale(.97); }
+  to   { opacity:1; transform: translateY(0)    scale(1);   }
+}
+#buddyPanel.open { display: flex; }
+#buddyHeader {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  padding: 14px 16px; display: flex; align-items: center;
+  justify-content: space-between; color: #fff; flex-shrink: 0;
+}
+#buddyMessages {
+  flex: 1; overflow-y: auto; padding: 14px 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  scroll-behavior: smooth;
+}
+.buddy-msg {
+  display: flex; gap: 8px; align-items: flex-end;
+  animation: buddyMsgIn .2s ease;
+}
+@keyframes buddyMsgIn {
+  from { opacity:0; transform: translateY(6px); }
+  to   { opacity:1; transform: translateY(0);   }
+}
+.buddy-msg.user { flex-direction: row-reverse; }
+.buddy-msg-avatar { font-size: 20px; flex-shrink: 0; margin-bottom: 2px; }
+.buddy-bubble {
+  max-width: 82%; padding: 9px 13px; border-radius: 16px;
+  font-size: 13px; line-height: 1.5;
+}
+.buddy-msg.bot  .buddy-bubble {
+  background: var(--primary-light); color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+.buddy-msg.user .buddy-bubble {
+  background: var(--primary); color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.buddy-typing .buddy-bubble {
+  background: var(--primary-light);
+  display: flex; gap: 4px; align-items: center; padding: 12px 16px;
+}
+.buddy-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--primary); opacity: .5;
+  animation: buddyDot 1.2s infinite;
+}
+.buddy-dot:nth-child(2) { animation-delay: .2s; }
+.buddy-dot:nth-child(3) { animation-delay: .4s; }
+@keyframes buddyDot {
+  0%,80%,100% { transform: scale(1);   opacity: .4; }
+  40%          { transform: scale(1.4); opacity: 1;  }
+}
+#buddySuggestions {
+  padding: 0 12px 8px; display: flex; flex-wrap: wrap; gap: 6px; flex-shrink: 0;
+}
+.buddy-chip {
+  background: var(--primary-light); color: var(--primary);
+  border: 1px solid var(--primary-mid); border-radius: 20px;
+  padding: 5px 11px; font-size: 11.5px; font-weight: 600;
+  cursor: pointer; transition: background .15s; white-space: nowrap;
+}
+.buddy-chip:hover { background: var(--primary-mid); }
+#buddyInputRow {
+  display: flex; gap: 8px; padding: 10px 12px;
+  border-top: 1px solid var(--border); flex-shrink: 0;
+  background: var(--card);
+}
+#buddyInput {
+  flex: 1; border: 1px solid var(--border); border-radius: 20px;
+  padding: 8px 14px; font-size: 13px; background: var(--bg);
+  outline: none; font-family: inherit; color: var(--text);
+}
+#buddyInput:focus { border-color: var(--primary); }
+#buddySendBtn {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--primary); color: #fff; border: none;
+  font-size: 16px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+  transition: background .15s; flex-shrink: 0;
+}
+#buddySendBtn:hover { background: var(--primary-dark); }
+
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 /* ═══════════════════════════════════════════════════════════
@@ -4521,6 +4938,34 @@ textarea { resize: vertical; min-height: 70px; }
   </div>
 </div>
 
+
+<!-- ═══════════════════════════════════════════════════
+     KITA BUDDY — Floating KI Assistent
+═══════════════════════════════════════════════════ -->
+<div id="buddyBtn" onclick="_buddyToggle()" title="KI Buddy">
+  <div id="buddyAvatar">🐣</div>
+  <div id="buddyPulse"></div>
+  <div id="buddyBadge" style="display:none">!</div>
+</div>
+
+<div id="buddyPanel">
+  <div id="buddyHeader">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:22px">🐣</span>
+      <div>
+        <div style="font-weight:700;font-size:14px">Kita Buddy</div>
+        <div id="buddyStatus" style="font-size:11px;color:var(--primary-mid)">● Online — frag mich alles!</div>
+      </div>
+    </div>
+    <button onclick="_buddyToggle()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:4px">✕</button>
+  </div>
+  <div id="buddyMessages"></div>
+  <div id="buddySuggestions"></div>
+  <div id="buddyInputRow">
+    <input id="buddyInput" type="text" placeholder="Frag mich etwas… 💬" onkeydown="if(event.key==='Enter')_buddySend()"/>
+    <button id="buddySendBtn" onclick="_buddySend()">➤</button>
+  </div>
+</div>
 </body>
 
 <!-- MODAL: EW NOTIZ -->
