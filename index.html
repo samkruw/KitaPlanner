@@ -350,10 +350,12 @@ function subActive(group, def) { return _subTab[group] || def; }
 
 
 function renderBelegung() {
-  const sub = subActive("belegung","kinder");
-  if(sub==="warteliste") return renderWarteliste();
-  if(sub==="tagesstruktur") return renderTagesstruktur();
-  if(sub==="forecast") return renderForecast();
+
+  const _sub_belegung = _subTab['belegung'] || 'belegung';
+  const _subTabBar_belegung = subTabs('belegung', [{id:"belegung",icon:"👶",label:"Belegung"},{id:"warteliste",icon:"⏳",label:"Warteliste"},{id:"tagesstruktur",icon:"📅",label:"Tagesstruktur"},{id:"forecast",icon:"📈",label:"Forecast"}], 'belegung');
+  if(_sub_belegung==='warteliste') return _subTabBar_belegung + renderWarteliste();
+  if(_sub_belegung==='tagesstruktur') return _subTabBar_belegung + renderTagesstruktur();
+  if(_sub_belegung==='forecast') return _subTabBar_belegung + renderForecast();
   const tabs=[
     {id:"kinder",label:"Belegung",icon:"👶"},
     {id:"warteliste",label:"Warteliste",icon:"⏳",badge:warteliste.length||0},
@@ -445,8 +447,10 @@ window._openTarifModal=id=>{
 
 // ── ANWESENHEIT ───────────────────────────────────────────
 function renderAnwesenheit() {
-  const sub = subActive("anwesenheit","heute");
-  if(sub==="statistik") return renderAnwesenheitStats();
+
+  const _sub_anwesenheit = _subTab['anwesenheit'] || 'anwesenheit';
+  const _subTabBar_anwesenheit = subTabs('anwesenheit', [{id:"anwesenheit",icon:"✅",label:"Anwesenheit"},{id:"statistik",icon:"📊",label:"Statistik"}], 'anwesenheit');
+  if(_sub_anwesenheit==='statistik') return _subTabBar_anwesenheit + renderAnwesenheitStats();
   const tabs=[
     {id:"heute",label:"Heute erfassen",icon:"✅"},
     {id:"statistik",label:"Statistik",icon:"📈"},
@@ -555,8 +559,10 @@ window._openAllergieBatch=()=>{
 // ── EINGEWÖHNUNG ──────────────────────────────────────────
 // ── ESSENSPLAN ────────────────────────────────────────────
 function renderEssensplan() {
-  const sub = subActive("essensplan","essensplan");
-  if(sub==="einkaufsliste") return renderEinkaufsliste();
+
+  const _sub_essensplan = _subTab['essensplan'] || 'essensplan';
+  const _subTabBar_essensplan = subTabs('essensplan', [{id:"essensplan",icon:"🍽️",label:"Essensplan"},{id:"einkaufsliste",icon:"🛒",label:"Einkaufsliste"}], 'essensplan');
+  if(_sub_essensplan==='einkaufsliste') return _subTabBar_essensplan + renderEinkaufsliste();
   const tabs=[
     {id:"essensplan",label:"Essensplan",icon:"🍽️"},
     {id:"einkaufsliste",label:"Einkaufsliste",icon:"🛒"},
@@ -644,9 +650,11 @@ window._openEssenModal=(id,datum)=>{
 
 // ── VERTRÄGE ──────────────────────────────────────────────
 function renderVertraege() {
-  const sub = subActive("vertraege","vertraege");
-  if(sub==="dokumente") return renderDokumente();
-  if(sub==="checkliste") return renderCheckliste();
+
+  const _sub_vertraege = _subTab['vertraege'] || 'vertraege';
+  const _subTabBar_vertraege = subTabs('vertraege', [{id:"vertraege",icon:"📄",label:"Verträge"},{id:"dokumente",icon:"📁",label:"Dokumente"},{id:"checkliste",icon:"☑️",label:"Aufnahme-Checkliste"}], 'vertraege');
+  if(_sub_vertraege==='dokumente') return _subTabBar_vertraege + renderDokumente();
+  if(_sub_vertraege==='checkliste') return _subTabBar_vertraege + renderCheckliste();
   const tabs=[
     {id:"vertraege",label:"Verträge",icon:"📄"},
     {id:"dokumente",label:"Dokumente",icon:"📁"},
@@ -741,10 +749,12 @@ window._druckVertrag=id=>{
 
 // ── RECHNUNGEN ────────────────────────────────────────────
 function renderRechnungen() {
-  const sub = subActive("rechnungen","rechnungen");
-  if(sub==="mahnwesen") return renderMahnwesen();
-  if(sub==="jahresabschluss") return renderJahresabschluss();
-  if(sub==="rechner") return renderRechner();
+
+  const _sub_rechnungen = _subTab['rechnungen'] || 'rechnungen';
+  const _subTabBar_rechnungen = subTabs('rechnungen', [{id:"rechnungen",icon:"🧾",label:"Rechnungen"},{id:"mahnwesen",icon:"⚠️",label:"Mahnwesen"},{id:"jahresabschluss",icon:"📊",label:"Jahresabschluss"},{id:"rechner",icon:"🔢",label:"Rechner"}], 'rechnungen');
+  if(_sub_rechnungen==='mahnwesen') return _subTabBar_rechnungen + renderMahnwesen();
+  if(_sub_rechnungen==='jahresabschluss') return _subTabBar_rechnungen + renderJahresabschluss();
+  if(_sub_rechnungen==='rechner') return _subTabBar_rechnungen + renderRechner();
   const tabs=[
     {id:"rechnungen",label:"Rechnungen",icon:"🧾"},
     {id:"mahnwesen",label:"Mahnwesen",icon:"⚠️",badge:rechnungen.filter(r=>r.status==="offen"&&r.faellig&&r.faellig<new Date().toISOString().slice(0,10)).length||0},
@@ -1161,8 +1171,10 @@ window._druckEssensplan = () => {
 
 // ── DIENSTPLAN ────────────────────────────────────────────
 function renderDienstplan() {
-  const sub = subActive("dienstplan","dienstplan");
-  if(sub==="ferien") return renderFerien();
+
+  const _sub_dienstplan = _subTab['dienstplan'] || 'dienstplan';
+  const _subTabBar_dienstplan = subTabs('dienstplan', [{id:"dienstplan",icon:"📅",label:"Dienstplan"},{id:"ferien",icon:"🌴",label:"Ferien & Schliesszeiten"}], 'dienstplan');
+  if(_sub_dienstplan==='ferien') return _subTabBar_dienstplan + renderFerien();
   const tabs=[
     {id:"dienstplan",label:"Dienstplan",icon:"📅"},
     {id:"ferien",label:"Ferienplan",icon:"🏖️"},
@@ -1603,8 +1615,10 @@ const BEREICH_LABELS={motorik:"Motorik",sprache:"Sprache & Kommunikation",sozial
 const BEREICH_ICONS={motorik:"🏃",sprache:"💬",sozial:"🤝",kognitiv:"🧠",kreativitaet:"🎨"};
 
 function renderBeobachtungen() {
-  const sub = subActive("beobachtungen","beobachtungen");
-  if(sub==="eingewoehnung") return renderEingewoehnung();
+
+  const _sub_beobachtungen = _subTab['beobachtungen'] || 'beobachtungen';
+  const _subTabBar_beobachtungen = subTabs('beobachtungen', [{id:"beobachtungen",icon:"📋",label:"Entwicklungsberichte"},{id:"eingewoehnung",icon:"📖",label:"Eingewöhnung"}], 'beobachtungen');
+  if(_sub_beobachtungen==='eingewoehnung') return _subTabBar_beobachtungen + renderEingewoehnung();
   const tabs=[
     {id:"beobachtungen",label:"Entwicklungsberichte",icon:"📋"},
     {id:"eingewoehnung",label:"Eingewöhnung",icon:"📖"},
