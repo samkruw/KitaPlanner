@@ -2713,9 +2713,10 @@ function kiPanelBrief() {
 }
 
 function kiPanelSimple(id, title, btnLabel, onclickFn) {
-  if(!getAiKey()) return '<div class="ki-inline-locked">⚡ <button class="btn-xs slate" onclick="_setTab(&quot;ki&quot;)">API Key einrichten</button> für KI-Funktionen</div>';
+  const hasKey = !!getAiKey();
+  const keyHint = hasKey ? '' : ' <button class="btn-xs slate" onclick="_setTab('ki')" style="font-size:10px">⚙️ Key einrichten</button>';
   return '<div class="ki-inline-panel">'
-    +'<div class="ki-inline-title">⚡ '+title+'</div>'
+    +'<div class="ki-inline-title">⚡ '+title+keyHint+'</div>'
     +'<div style="display:flex;gap:8px;align-items:center">'
     +'<button class="ki-btn-sm" onclick="'+onclickFn+'">✨ '+btnLabel+'</button>'
     +'<span id="'+id+'Spin" style="display:none;color:var(--primary);font-size:11px;font-weight:600">⚡ Generiere…</span>'
@@ -2995,10 +2996,9 @@ window._kiWochenrueckblickInline=async()=>{
   const now=new Date(), sow=new Date(now);
   sow.setDate(now.getDate()-((now.getDay()||7)-1));
   const menus=essensplaene.filter(e=>{ const d=new Date(e.datum); return d>=sow&&d<=now; });
-  const win=window.open("","_blank","width=640,height=500");
   win.document.write("<html><head><meta charset=\'UTF-8\'></head><body style=\'font-family:Arial;padding:20px\'><h2>📝 Wochenrueckblick…</h2><div id=\'r\' style=\'white-space:pre-wrap;line-height:1.7;font-size:13px\'></div></body></html>");
-  const r=await groqCall(KITA_KONTEXT()+" Wochenrueckblicke fuer Eltern, warm.","Wochenrueckblick "+sow.toLocaleDateString("de-CH")+". Menues: "+(menus.map(m=>m.mittagessen||"-").join(", ")||"-")+". Kinder: "+kinder.length+". Freudiger Rueckblick, Highlights, Vorschau. Max 200W.",t=>{ win.document.getElementById("r").textContent=t; });
-  if(r)win.document.body.innerHTML+="<button onclick=\'window.print()\' style=\'margin:10px;padding:8px 16px;background:#2563EB;color:#fff;border:none;border-radius:6px;cursor:pointer\'>🖨️ Drucken</button>";
+  const r=await groqCall(KITA_KONTEXT()+" Wochenrueckblicke fuer Eltern, warm.","Wochenrueckblick "+sow.toLocaleDateString("de-CH")+". Menues: "+(menus.map(m=>m.mittagessen||"-").join(", ")||"-")+". Kinder: "+kinder.length+". Freudiger Rueckblick, Highlights, Vorschau. Max 200W.",t=>{ _kiStreamToModal(t); });
+  if(r)// print button handled by modalpadding:8px 16px;background:#2563EB;color:#fff;border:none;border-radius:6px;cursor:pointer\'>🖨️ Drucken</button>";
 };
 
 window._kiBeschwerdeQuick=async()=>{
@@ -3011,26 +3011,23 @@ window._kiBeschwerdeQuick=async()=>{
 
 window._kiQualitaetsbericht=async()=>{
   if(!getAiKey()){alert("API Key eingeben.");return;}
-  const win=window.open("","_blank","width=800,height=700");
   win.document.write("<html><head><meta charset=\'UTF-8\'><style>body{font-family:Arial;padding:40px;max-width:750px;line-height:1.8}h2{color:#2563EB;border-bottom:1pt solid #e2e8f0;padding-bottom:4px}</style></head><body><h2>⚡ Qualitaetsbericht "+new Date().getFullYear()+"</h2><div id=\'r\'></div></body></html>");
-  await groqCall(KITA_KONTEXT()+" Qualitaetsberichte nach kibesuisse-Standards.","Qualitaetsbericht "+new Date().getFullYear()+" fuer "+KITA.name+": "+kinder.length+"/20 Plaetze ("+Math.round(kinder.length/20*100)+"%), "+subvList().length+" subv., "+mitarbeiter.filter(m=>m.status==="aktiv").length+" Mitarbeiter. Struktur: 1.Summary 2.Belegung 3.Betreuung 4.Sicherheit 5.Personal 6.Finanzen 7.Ziele. Ca 400W.",t=>{ win.document.getElementById("r").innerHTML=t.replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br/>"); });
-  win.document.body.innerHTML+="<button onclick=\'window.print()\' style=\'margin:15px 0;padding:10px 20px;background:#2563EB;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700\'>🖨️ Drucken</button>";
+  await groqCall(KITA_KONTEXT()+" Qualitaetsberichte nach kibesuisse-Standards.","Qualitaetsbericht "+new Date().getFullYear()+" fuer "+KITA.name+": "+kinder.length+"/20 Plaetze ("+Math.round(kinder.length/20*100)+"%), "+subvList().length+" subv., "+mitarbeiter.filter(m=>m.status==="aktiv").length+" Mitarbeiter. Struktur: 1.Summary 2.Belegung 3.Betreuung 4.Sicherheit 5.Personal 6.Finanzen 7.Ziele. Ca 400W.",t=>{ _kiStreamToModal(t); });
+  // print button handled by modalpadding:10px 20px;background:#2563EB;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700\'>🖨️ Drucken</button>";
 };
 
 window._kiKonzept=async()=>{
   if(!getAiKey()){alert("API Key eingeben.");return;}
-  const win=window.open("","_blank","width=900,height=700");
   win.document.write("<html><head><meta charset=\'UTF-8\'><style>body{font-family:Arial;padding:40px;max-width:750px;line-height:1.8}h1{color:#2563EB}h2{color:#1e40af;margin-top:20px;border-bottom:1pt solid #e2e8f0;padding-bottom:4px}</style></head><body><h1>⚡ Paedagogisches Konzept</h1><div id=\'r\'></div></body></html>");
-  await groqCall(KITA_KONTEXT()+" Paedagogische Konzepte nach kibesuisse.","Konzept fuer "+KITA.name+" in "+KITA.ort+". 20 Plaetze ("+kinder.length+" Kinder), "+mitarbeiter.filter(m=>m.status==="aktiv").length+" FTE. Abschnitte: 1.Leitbild 2.Philosophie 3.Eingewoehnung 4.Tagesstruktur 5.Ernaehrung 6.Eltern 7.Team 8.Raum 9.Inklusion 10.Datenschutz. Ca 600W.",t=>{ win.document.getElementById("r").innerHTML=t.replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br/>"); });
-  win.document.body.innerHTML+="<button onclick=\'window.print()\' style=\'margin:15px 0;padding:10px 20px;background:#2563EB;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700\'>🖨️ Drucken</button>";
+  await groqCall(KITA_KONTEXT()+" Paedagogische Konzepte nach kibesuisse.","Konzept fuer "+KITA.name+" in "+KITA.ort+". 20 Plaetze ("+kinder.length+" Kinder), "+mitarbeiter.filter(m=>m.status==="aktiv").length+" FTE. Abschnitte: 1.Leitbild 2.Philosophie 3.Eingewoehnung 4.Tagesstruktur 5.Ernaehrung 6.Eltern 7.Team 8.Raum 9.Inklusion 10.Datenschutz. Ca 600W.",t=>{ _kiStreamToModal(t); });
+  // print button handled by modalpadding:10px 20px;background:#2563EB;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700\'>🖨️ Drucken</button>";
 };
 
 window._kiElternumfrage=async()=>{
   if(!getAiKey()){alert("API Key eingeben.");return;}
-  const win=window.open("","_blank","width=800,height=650");
   win.document.write("<html><head><meta charset=\'UTF-8\'><style>@page{size:A4;margin:15mm}body{font-family:Arial;font-size:11pt;padding:20px}h1{color:#2563EB}h2{font-size:11pt;font-weight:700;margin:16px 0 6px}</style></head><body><h1>🏡 "+esc(KITA.name)+" - Elternumfrage</h1><div id=\'r\'><em>Generiere Umfrage...</em></div></body></html>");
-  await groqCall(KITA_KONTEXT()+" Elternumfragen fuer Schweizer Kitas.","15 Fragen Elternumfrage fuer "+KITA.name+": 10 Skalenfragen (Sehr zufrieden / Zufrieden / Neutral / Unzufrieden / Sehr unzufrieden), 3 Ja/Nein, 2 offene Fragen. Kategorien: Kommunikation, Betreuung, Personal, Raeume, Allgemein. Schweizer Hochdeutsch.",t=>{ win.document.getElementById("r").innerHTML=t.replace(/\*\*(.*?)\*\*/g,"<h2>$1</h2>").replace(/\n/g,"<br/>"); });
-  win.document.body.innerHTML+="<button onclick=\'window.print()\' style=\'position:fixed;bottom:20px;right:20px;padding:10px 20px;background:#2563EB;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.15)\'>🖨️ Drucken</button>";
+  await groqCall(KITA_KONTEXT()+" Elternumfragen fuer Schweizer Kitas.","15 Fragen Elternumfrage fuer "+KITA.name+": 10 Skalenfragen (Sehr zufrieden / Zufrieden / Neutral / Unzufrieden / Sehr unzufrieden), 3 Ja/Nein, 2 offene Fragen. Kategorien: Kommunikation, Betreuung, Personal, Raeume, Allgemein. Schweizer Hochdeutsch.",t=>{ _kiStreamToModal(t); });
+  // print button handled by modalbottom:20px;right:20px;padding:10px 20px;background:#2563EB;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.15)\'>🖨️ Drucken</button>";
 };
 
 window._kiWillkommenInline=async(kindId,kindName)=>{
@@ -3124,7 +3121,7 @@ function renderCheckliste(){
   const katBlocks=kats.map(kat=>{
     const items=AUFNAHME_ITEMS.filter(i=>i.kat===kat);
     const katDone=items.filter(i=>checkData[i.id]).length;
-    return `<div class="table-card mb-4"><div class="table-header"><span class="table-title">${kat}</span>${pill(katDone+"/"+items.length,katDone===items.length?"green":"amber")}</div><div style="padding:4px 0">${items.map(item=>`<label style="display:flex;align-items:center;gap:10px;padding:8px 16px;cursor:pointer;border-bottom:1px solid var(--border)" onclick="_toggleCheck('${kindFilter}','${item.id}',this)"><input type="checkbox" ${checkData[item.id]?"checked":""} style="width:16px;height:16px;cursor:pointer" onchange="_toggleCheck('${kindFilter}','${item.id}',this.parentElement)"/><span style="font-size:13px;${checkData[item.id]?"text-decoration:line-through;color:var(--muted)":""}">${item.label}</span>${checkData[item.id]?'<span style="margin-left:auto;font-size:11px;color:var(--green)">✅</span>':""}</label>`).join("")}</div></div>`;
+    return `<div class="table-card mb-4"><div class="table-header"><span class="table-title">${kat}</span>${pill(katDone+"/"+items.length,katDone===items.length?"green":"amber")}</div><div style="padding:4px 0">${items.map(item=>`<label style="display:flex;align-items:center;gap:10px;padding:8px 16px;cursor:pointer;border-bottom:1px solid var(--border)" onclick="event.stopPropagation();_toggleCheck('${kindFilter}','${item.id}',this)"><input type="checkbox" ${checkData[item.id]?"checked":""} style="width:16px;height:16px;cursor:pointer" onclick="event.stopPropagation()" onchange="_toggleCheck('${kindFilter}','${item.id}',this.parentElement)"/><span style="font-size:13px;${checkData[item.id]?"text-decoration:line-through;color:var(--muted)":""}">${item.label}</span>${checkData[item.id]?'<span style="margin-left:auto;font-size:11px;color:var(--green)">✅</span>':""}</label>`).join("")}</div></div>`;
   }).join("");
   return `${statsGrid([{icon:"✅",val:done,lbl:"Erledigt",color:"green"},{icon:"⭕",val:total-done,lbl:"Offen",color:total-done>0?"amber":"green"},{icon:"📊",val:Math.round(done/total*100)+"%",lbl:"Fortschritt",color:done===total?"green":"primary"},{icon:"🎯",val:total,lbl:"Total"}])}<div class="toolbar">${kindSel}${kindFilter?`<button class="btn-secondary" onclick="_resetCheck('${kindFilter}')">↺ Zurücksetzen</button>`:""}</div>${katBlocks}`;
 }
@@ -3132,9 +3129,11 @@ window._toggleCheck=async(kindId,itemId,el)=>{
   if(!kindId){alert("Kind wählen.");return;}
   const saved=checklisten.find(c=>c.kindId===kindId);
   const items={...(saved?.items||{})};
-  const cb=el.querySelector("input[type=checkbox]");
-  items[itemId]=cb?cb.checked:!items[itemId];
+  // Toggle the current state
+  items[itemId]=!items[itemId];
   const k=kinder.find(x=>x.id===kindId);
+  const cb=el.querySelector("input[type=checkbox]");
+  if(cb) cb.checked=items[itemId]; // Update UI immediately
   await save("checklisten",saved?.id||"check_"+kindId,{kindId,kindName:k?.name||"",items});
 };
 window._resetCheck=async(kindId)=>{
@@ -3159,6 +3158,32 @@ function getAbsenzAlerts(){
   if(!alerts.length)return"";
   return `<div class="dash-info-row" style="background:#fef3c7;border-radius:6px;padding:6px 8px;margin-top:4px"><span class="dash-info-icon">😷</span><div><div style="font-size:12px;font-weight:600;color:var(--amber)">${alerts.length} Kind${alerts.length>1?"er":""} seit 3+ Tagen krank</div><div class="cell-sub">${alerts.map(a=>`${a.kind.name} (${a.tage}T)`).join(", ")}</div></div><button class="btn-xs slate" style="margin-left:auto" onclick="_setTab('anwesenheit')">→</button></div>`;
 }
+
+// ── KI OUTPUT MODAL ───────────────────────────────────────
+function _kiOpenModal(title) {
+  const el = document.getElementById("kiOutputModal");
+  const titleEl = document.getElementById("kiOutputTitle");
+  const bodyEl = document.getElementById("kiOutputBody");
+  if(!el||!titleEl||!bodyEl){ console.error("KI modal not found"); return; }
+  titleEl.textContent = title||"KI-Ergebnis";
+  bodyEl.innerHTML = "<div style=\"text-align:center;padding:30px;color:var(--muted)\">⚡ Generiere Bericht…</div>";
+  el.style.display = "flex";
+}
+window._kiDruckModal = () => {
+  const body = document.getElementById("kiOutputBody")?.innerText||"";
+  const title = document.getElementById("kiOutputTitle")?.textContent||"KI-Ergebnis";
+  const printWin = window.open("","_blank","width=800,height=700");
+  if(!printWin){ alert("Bitte Popup-Blocker deaktivieren für Drucken."); return; }
+  printWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>@page{margin:20mm}body{font-family:Arial,sans-serif;font-size:11pt;line-height:1.7;max-width:170mm;margin:0 auto}h2{color:#2563EB}</style></head><body><h2>'+title+'</h2><hr/><pre style="white-space:pre-wrap;font-family:inherit">'+body+'</pre></body></html>');
+  printWin.document.close();
+  setTimeout(()=>{ try{printWin.print();}catch(e){} }, 600);
+};
+window._kiCopyModal = () => {
+  const text = document.getElementById("kiOutputBody")?.innerText||"";
+  navigator.clipboard.writeText(text)
+    .then(()=>toast("📋 Kopiert!","success"))
+    .catch(()=>{ document.getElementById("kiOutputBody")?.focus(); alert("Bitte manuell kopieren (Ctrl+A, Ctrl+C)"); });
+};
 
 // ── SHOW / HIDE ────────────────────────────────────────────
 function showLogin(){ $("loginScreen").style.display="flex"; $("appScreen").style.display="none"; }
@@ -4440,6 +4465,19 @@ textarea { resize: vertical; min-height: 70px; }
   </div>
 </div>
 
+
+<!-- ── KI OUTPUT MODAL ── -->
+<div class="modal-overlay" id="kiOutputModal" onclick="if(event.target===this)closeModal('kiOutputModal')" style="z-index:600">
+  <div class="modal-box" style="max-width:720px;max-height:85vh;overflow-y:auto">
+    <div class="modal-title" id="kiOutputTitle">KI-Ergebnis</div>
+    <div id="kiOutputBody" style="font-size:13px;line-height:1.8;color:var(--text)"></div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="_kiDruckModal()">🖨️ Drucken</button>
+      <button class="btn-secondary" onclick="_kiCopyModal()">📋 Kopieren</button>
+      <button class="btn-cancel" onclick="closeModal('kiOutputModal')">✕ Schliessen</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
