@@ -2907,9 +2907,87 @@ window._kiElternbriefInline=async()=>{
 window._kiEssensplanInline=async()=>{
   const s=$("kiESaison")?.value||"aktuell", k=$("kiEKueche")?.value||"Schweizer", a=$("kiEAllerg")?.value||"keine";
   _kiSpin("kiESpin",true); _kiOut("kiEOut",""); _kiOut("kiEAct","");
-  const r=await groqCall(KITA_KONTEXT()+" Mahlzeiten 1-5 Jahre, kindgerecht.","Wochen-Menueplan Mo-Fr, "+s+", Kueche: "+k+", Allergien: "+a+". Format: **Tag:** Mittag: ... | Vegi: ... | Znueni: ...",t=>{ _kiOut("kiEOut","<div class=\"ki-inline-out-text\">"+t.replace(/\n/g,"<br/>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")+"</div>"); });
+  const prompt="Wochen-Menueplan fuer Kita, "+s+", Kueche: "+k+", Allergien: "+a+
+    ". Antworte NUR mit 5 Zeilen, eine pro Tag, exakt dieses Format (keine weiteren Texte):\n"+
+    "MONTAG|Mittag: ...|Vegi: ...|Znueni: ...\n"+
+    "DIENSTAG|Mittag: ...|Vegi: ...|Znueni: ...\n"+
+    "MITTWOCH|Mittag: ...|Vegi: ...|Znueni: ...\n"+
+    "DONNERSTAG|Mittag: ...|Vegi: ...|Znueni: ...\n"+
+    "FREITAG|Mittag: ...|Vegi: ...|Znueni: ...";
+  const r=await groqCall(KITA_KONTEXT()+" Mahlzeiten 1-5 Jahre, kindgerecht, kurze Antworten.",prompt,t=>{
+    _kiOut("kiEOut","<div class=\"ki-inline-out-text\">"+_formatMenuplan(t)+"</div>");
+  });
   _kiSpin("kiESpin",false);
-  if(r) _kiOut("kiEAct","<button class=\"btn-xs slate\" onclick=\"_kiCopy(this,'kiEOut')\" >📋 Kopieren</button>");
+  if(r){
+    const parsed=_parseMenuplan(r);
+    const hasData=parsed.some(p=>p.mittagessen);
+    _kiOut("kiEAct",
+      "<div style='display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap'>"+
+      "<button class='btn-xs slate' onclick='_kiCopy(this,\"kiEOut\")'>📋 Kopieren</button>"+
+      (hasData?"<button class='btn-xs primary' onclick='_kiMenuplanSpeichern()'>✅ Menüplan übernehmen</button>":"")+
+      "</div>"
+    );
+    window._kiParsedMenu=parsed;
+  }
+};
+
+function _formatMenuplan(text){
+  // Display nicely: parse pipe-separated lines into a table-like HTML
+  const lines=text.trim().split("\n").filter(l=>l.includes("|"));
+  if(!lines.length) return text.replace(/\n/g,"<br>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>");
+  return lines.map(line=>{
+    const parts=line.split("|");
+    const tag=parts[0].trim();
+    const rest=parts.slice(1).map(p=>p.trim()).filter(Boolean);
+    return "<div style='padding:6px 0;border-bottom:1px solid var(--border)'>"
+      +"<strong style='color:var(--primary);min-width:100px;display:inline-block'>"+tag+"</strong> "
+      +rest.join(" &nbsp;·&nbsp; ")
+      +"</div>";
+  }).join("");
+}
+
+function _parseMenuplan(text){
+  const DAYMAP={"MONTAG":0,"DIENSTAG":1,"MITTWOCH":2,"DONNERSTAG":3,"FREITAG":4};
+  const now=new Date();
+  const sow=new Date(now); sow.setDate(now.getDate()-((now.getDay()||7)-1));
+  const lines=text.trim().split("\n").filter(l=>l.includes("|"));
+  return lines.map(line=>{
+    const parts=line.split("|");
+    const tagRaw=parts[0].trim().toUpperCase();
+    const idx=DAYMAP[tagRaw];
+    if(idx===undefined) return null;
+    const d=new Date(sow); d.setDate(sow.getDate()+idx);
+    const datum=d.toISOString().slice(0,10);
+    let mittagessen="", vegi=false, znueni="";
+    parts.slice(1).forEach(p=>{
+      const t=p.trim();
+      if(t.toLowerCase().startsWith("mittag:")) mittagessen=t.slice(7).trim();
+      else if(t.toLowerCase().startsWith("vegi:")) znueni_vegi: {
+        const v=t.slice(5).trim();
+        if(v&&v.toLowerCase()!=="–"&&v!=="-"&&v.toLowerCase()!=="nein"){ vegi=true; }
+      }
+      else if(t.toLowerCase().startsWith("znueni:")) znueni=t.slice(7).trim();
+    });
+    return {datum,mittagessen,vegi,znueni};
+  }).filter(Boolean);
+}
+
+window._kiMenuplanSpeichern=async()=>{
+  const parsed=window._kiParsedMenu||[];
+  if(!parsed.length){alert("Kein Menüplan zum Speichern.");return;}
+  const btn=event?.target; if(btn){btn.disabled=true;btn.textContent="⏳ Speichere…";}
+  let saved=0, skipped=0;
+  for(const p of parsed){
+    if(!p.mittagessen) continue;
+    // Check if entry already exists for this date
+    const existing=essensplaene.find(e=>e.datum===p.datum);
+    const id=existing?.id||"essen_"+p.datum.replace(/-/g,"");
+    const ok=await save("essensplaene",id,{datum:p.datum,mittagessen:p.mittagessen,vegi:p.vegi,znueni:p.znueni,notizen:"KI-generiert"});
+    if(ok) saved++; else skipped++;
+  }
+  if(btn){btn.disabled=false;btn.textContent="✅ Gespeichert!";}
+  toast("🍽️ "+saved+" Menüs übernommen!","success");
+  setTimeout(()=>renderAll(),500);
 };
 
 window._kiBeobInline=async(kindId,kindName)=>{
