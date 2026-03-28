@@ -3565,14 +3565,12 @@ Du kennst alle Daten der App:
 - Essensplan heute: ${essensplaene.find(e=>e.datum===new Date().toISOString().slice(0,10))?.mittagessen||"Noch nicht geplant"}
 - Aktive Module: Dashboard, Belegung, Anwesenheit, Essensplan, Rechnungen, Personal, Kommunikation, Protokolle, KI-Assistent
 
-AKTIONEN die du ausführen kannst (wenn der User etwas öffnen will, antworte mit einem JSON-Tag am Ende):
-- Tab öffnen: [ACTION:TAB:dashboard], [ACTION:TAB:belegung], [ACTION:TAB:anwesenheit], [ACTION:TAB:essensplan], [ACTION:TAB:rechnungen], [ACTION:TAB:kommunikation], [ACTION:TAB:dienstplan], [ACTION:TAB:mitarbeiter], [ACTION:TAB:ki], [ACTION:TAB:unfallprotokoll], [ACTION:TAB:medikamente], [ACTION:TAB:warteliste]
-- Kind erfassen: [ACTION:OPEN:kind]
-- Rechnung erstellen: [ACTION:OPEN:rechnung]
-- Morgen-Briefing: [ACTION:OPEN:briefing]
+AKTIONEN (füge passenden Tag ans Ende wenn User etwas öffnen/erfassen will):
+Tabs: [ACTION:TAB:dashboard] [ACTION:TAB:belegung] [ACTION:TAB:anwesenheit] [ACTION:TAB:essensplan] [ACTION:TAB:einkaufsliste] [ACTION:TAB:rechnungen] [ACTION:TAB:kommunikation] [ACTION:TAB:dienstplan] [ACTION:TAB:mitarbeiter] [ACTION:TAB:vertraege] [ACTION:TAB:beobachtungen] [ACTION:TAB:eingewoehnung] [ACTION:TAB:unfallprotokoll] [ACTION:TAB:medikamente] [ACTION:TAB:kesb] [ACTION:TAB:warteliste] [ACTION:TAB:ki]
+Erfassen: [ACTION:OPEN:kind] [ACTION:OPEN:mitarbeiter] [ACTION:OPEN:rechnung] [ACTION:OPEN:dienst] [ACTION:OPEN:warte] [ACTION:OPEN:essen] [ACTION:OPEN:vertrag] [ACTION:OPEN:unfall] [ACTION:OPEN:medi] [ACTION:OPEN:nachricht] [ACTION:OPEN:kesb]
+Sonstiges: [ACTION:OPEN:briefing] [ACTION:OPEN:settings]
 
-Wenn der User eine Aktion will, erkläre kurz was du tust und füge den passenden ACTION-Tag ans Ende.
-Behalte die Antworten kurz (max 120 Wörter). Nutze Emojis sparsam aber gezielt.`;
+Erkläre kurz was du tust und füge den Tag ans Ende. Max 100 Wörter. Emojis gezielt einsetzen.`;
 
   const SUGGESTIONS_DEFAULT = [
     "📊 Wie viele Kinder?",
@@ -3735,11 +3733,34 @@ Behalte die Antworten kurz (max 120 Wörter). Nutze Emojis sparsam aber gezielt.
   };
 
   function _buddyExecuteAction(type, val){
-    if(type==="TAB"){ _setTab(val); }
+    if(type==="TAB"){
+      // Handle subtabs
+      const tabMap = {
+        einkaufsliste: ()=>{ _setTab("essensplan"); setTimeout(()=>_setSubTab("essensplan","einkaufsliste"),200); },
+        warteliste:    ()=>{ _setTab("belegung");  setTimeout(()=>_setSubTab("belegung","warteliste"),200); },
+        eingewoehnung: ()=>{ _setTab("eingewoehnung"); },
+        jahresabschluss:()=>{ _setTab("rechnungen"); setTimeout(()=>_setSubTab("rechnungen","jahresabschluss"),200); },
+      };
+      if(tabMap[val]) tabMap[val]();
+      else _setTab(val);
+    }
     else if(type==="OPEN"){
-      if(val==="kind"){ _openKindModal(); }
-      else if(val==="rechnung"){ _setTab("rechnungen"); setTimeout(()=>_openRechModal(),300); }
-      else if(val==="briefing"){ _kiMorgenBriefing(); }
+      const openMap = {
+        kind:       ()=>{ _setTab("belegung");      setTimeout(()=>_openKindModal(),    300); },
+        mitarbeiter:()=>{ _setTab("mitarbeiter");   setTimeout(()=>_openMitarbModal(),  300); },
+        rechnung:   ()=>{ _setTab("rechnungen");    setTimeout(()=>_openRechModal(),    300); },
+        dienst:     ()=>{ _setTab("dienstplan");    setTimeout(()=>_openDienstModal(),  300); },
+        warte:      ()=>{ _setTab("belegung");      setTimeout(()=>{ _setSubTab("belegung","warteliste"); setTimeout(()=>_openWarteModal(),200); },300); },
+        essen:      ()=>{ _setTab("essensplan");    setTimeout(()=>_openEssenModal("",new Date().toISOString().slice(0,10)),300); },
+        vertrag:    ()=>{ _setTab("vertraege");     setTimeout(()=>_openVertragModal(), 300); },
+        unfall:     ()=>{ _setTab("unfallprotokoll"); setTimeout(()=>_openUnfallModal(),300); },
+        medi:       ()=>{ _setTab("medikamente");   setTimeout(()=>_openMediModal(),    300); },
+        nachricht:  ()=>{ _setTab("kommunikation"); setTimeout(()=>_openNachrichtModal(null,null,"brief"),300); },
+        kesb:       ()=>{ _setTab("kesb");          setTimeout(()=>_openKesbModal(),    300); },
+        briefing:   ()=>{ _kiMorgenBriefing(); },
+        settings:   ()=>{ _openKitaSettings(); },
+      };
+      if(openMap[val]) openMap[val]();
     }
   }
 
