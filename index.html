@@ -3590,6 +3590,21 @@ Behalte die Antworten kurz (max 120 Wörter). Nutze Emojis sparsam aber gezielt.
     "📋 Protokolle",
   ];
 
+  function _buddyEmotion(emotion, duration){
+    const img = document.getElementById("buddyFigImg");
+    if(!img) return;
+    // Remove all emotion classes
+    img.classList.remove("emotion-wave","emotion-think","emotion-jubel","emotion-shake","emotion-warn","emotion-enter","emotion-happy","emotion-spin");
+    if(emotion){
+      // Force reflow to restart animation
+      void img.offsetWidth;
+      img.classList.add("emotion-"+emotion);
+      if(duration) setTimeout(()=>{
+        img.classList.remove("emotion-"+emotion);
+      }, duration);
+    }
+  }
+
   window._buddyToggle = ()=>{
     _open = !_open;
     const panel = document.getElementById("buddyPanel");
@@ -3598,6 +3613,7 @@ Behalte die Antworten kurz (max 120 Wörter). Nutze Emojis sparsam aber gezielt.
     if(_open){
       document.getElementById("buddyBadge").style.display="none";
       _buddyHideBubble();
+      _buddyEmotion("wave", 1800);
     }
     if(_open) setTimeout(()=>document.getElementById("buddyInput")?.focus(), 200);
   };
@@ -3616,6 +3632,7 @@ Behalte die Antworten kurz (max 120 Wörter). Nutze Emojis sparsam aber gezielt.
   }
 
   function _buddyGreet(){
+    _buddyEmotion("happy", 1400);
     const hour = new Date().getHours();
     const gruss = hour<12?"Guten Morgen":hour<17?"Guten Tag":"Guten Abend";
     const offene = rechnungen.filter(r=>r.status==="offen"&&r.faellig&&r.faellig<new Date().toISOString().slice(0,10)).length;
@@ -3650,10 +3667,12 @@ Behalte die Antworten kurz (max 120 Wörter). Nutze Emojis sparsam aber gezielt.
     div.innerHTML = `<div class="buddy-msg-avatar">🐣</div><div class="buddy-bubble"><div class="buddy-dot"></div><div class="buddy-dot"></div><div class="buddy-dot"></div></div>`;
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
+    _buddyEmotion("think");
   }
 
   function _buddyRemoveTyping(){
     document.getElementById("buddyTyping")?.remove();
+    _buddyEmotion(null);
   }
 
   function _showSuggestions(chips){
@@ -3698,10 +3717,18 @@ Behalte die Antworten kurz (max 120 Wörter). Nutze Emojis sparsam aber gezielt.
       _history.push({role:"assistant", content:reply});
       _buddyRemoveTyping();
       _buddyAddMsg("bot", reply);
+      // Emotion based on reply content
+      const rl = reply.toLowerCase();
+      if(rl.includes("überfällig")||rl.includes("fehlt")||rl.includes("warnung")||rl.includes("achtung")){
+        _buddyEmotion("warn", 4000);
+      } else if(rl.includes("super")||rl.includes("toll")||rl.includes("prima")||rl.includes("herzlichen")||rl.includes("geburtstag")){
+        _buddyEmotion("jubel", 2200);
+      }
       // Show follow-up suggestions
       _showSuggestions(SUGGESTIONS_AFTER);
     } catch(e){
       _buddyRemoveTyping();
+      _buddyEmotion("shake", 1200);
       _buddyAddMsg("bot","❌ Fehler: "+e.message);
     }
     document.getElementById("buddySendBtn").disabled = false;
@@ -3733,16 +3760,18 @@ Behalte die Antworten kurz (max 120 Wörter). Nutze Emojis sparsam aber gezielt.
     if(hints.length>0){
       const badge = document.getElementById("buddyBadge");
       if(badge){ badge.style.display="flex"; badge.textContent=hints.length; }
-      // Show first hint as speech bubble
-      setTimeout(()=>_buddyShowBubble(hints[0]), 1500);
+      // Show first hint as speech bubble + warn emotion
+      setTimeout(()=>{ _buddyShowBubble(hints[0]); _buddyEmotion("warn", 5000); }, 1500);
     } else {
-      // Friendly greeting bubble
+      // Friendly greeting bubble + wave
       const hour = new Date().getHours();
       const gruss = hour<12?"Guten Morgen! 👋":hour<17?"Hallo! 😊":"Guten Abend! 🌙";
-      setTimeout(()=>_buddyShowBubble(gruss), 2000);
+      setTimeout(()=>{ _buddyShowBubble(gruss); _buddyEmotion("happy", 1400); }, 2000);
     }
   }
 
+  // Entrance animation on load
+  setTimeout(()=>_buddyEmotion("enter", 700), 500);
   // Run proactive check after data loads
   setTimeout(()=>_checkProactiveHints(), 3000);
 
@@ -3779,11 +3808,80 @@ Behalte die Antworten kurz (max 120 Wörter). Nutze Emojis sparsam aber gezielt.
 #buddyFigImg {
   width: 110px; height: 110px; object-fit: contain;
   animation: buddyBob 3s ease-in-out infinite;
+  transition: filter .3s ease;
 }
+/* ── Idle ── */
 @keyframes buddyBob {
   0%,100% { transform: translateY(0);   }
   50%      { transform: translateY(-6px); }
 }
+/* ── Winken beim Öffnen ── */
+@keyframes buddyWaveOpen {
+  0%        { transform: translateY(0) rotate(0deg); }
+  20%       { transform: translateY(-8px) rotate(-12deg); }
+  40%       { transform: translateY(-8px) rotate(12deg); }
+  60%       { transform: translateY(-8px) rotate(-8deg); }
+  80%       { transform: translateY(-8px) rotate(8deg); }
+  100%      { transform: translateY(0) rotate(0deg); }
+}
+/* ── Nachdenken ── */
+@keyframes buddyThink {
+  0%,100% { transform: translateY(0) rotate(0deg); }
+  25%     { transform: translateY(-3px) rotate(-5deg); }
+  75%     { transform: translateY(-3px) rotate(5deg); }
+}
+/* ── Jubel ── */
+@keyframes buddyJubel {
+  0%,100% { transform: translateY(0) scale(1); }
+  20%     { transform: translateY(-15px) scale(1.1); }
+  40%     { transform: translateY(-5px) scale(1.05); }
+  60%     { transform: translateY(-12px) scale(1.1); }
+  80%     { transform: translateY(-3px) scale(1.02); }
+}
+/* ── Schütteln bei Fehler ── */
+@keyframes buddyShake {
+  0%,100% { transform: translateX(0); }
+  20%     { transform: translateX(-8px) rotate(-5deg); }
+  40%     { transform: translateX(8px) rotate(5deg); }
+  60%     { transform: translateX(-6px) rotate(-3deg); }
+  80%     { transform: translateX(6px) rotate(3deg); }
+}
+/* ── Einspringen ── */
+@keyframes buddyEntrance {
+  0%   { transform: translateY(120px) scale(.5); opacity:0; }
+  60%  { transform: translateY(-15px) scale(1.05); opacity:1; }
+  80%  { transform: translateY(5px) scale(.98); }
+  100% { transform: translateY(0) scale(1); opacity:1; }
+}
+/* ── Warnung: Pulsieren ── */
+@keyframes buddyWarn {
+  0%,100% { filter: drop-shadow(0 0 0px rgba(239,68,68,0)); }
+  50%     { filter: drop-shadow(0 0 12px rgba(239,68,68,.8)); }
+}
+/* ── Drehen beim Laden ── */
+@keyframes buddySpin {
+  0%   { transform: rotate(0deg) scale(1); }
+  25%  { transform: rotate(-15deg) scale(1.05); }
+  50%  { transform: rotate(0deg) scale(1); }
+  75%  { transform: rotate(15deg) scale(1.05); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+/* ── Freude beim Grüssen ── */
+@keyframes buddyHappy {
+  0%,100% { transform: translateY(0) scale(1) rotate(0deg); }
+  20%     { transform: translateY(-10px) scale(1.08) rotate(-6deg); }
+  40%     { transform: translateY(-6px) scale(1.05) rotate(6deg); }
+  60%     { transform: translateY(-10px) scale(1.08) rotate(-4deg); }
+  80%     { transform: translateY(-4px) scale(1.03) rotate(4deg); }
+}
+/* Emotion-Klassen */
+#buddyFigImg.emotion-wave    { animation: buddyWaveOpen .8s ease forwards, buddyBob 3s ease-in-out 1s infinite; }
+#buddyFigImg.emotion-think   { animation: buddySpin .8s ease-in-out infinite; filter: brightness(1.05) hue-rotate(20deg); }
+#buddyFigImg.emotion-jubel   { animation: buddyJubel .7s ease 3; }
+#buddyFigImg.emotion-shake   { animation: buddyShake .5s ease 2; filter: hue-rotate(180deg) saturate(1.5); }
+#buddyFigImg.emotion-warn    { animation: buddyBob 3s ease-in-out infinite, buddyWarn 1s ease-in-out infinite; }
+#buddyFigImg.emotion-enter   { animation: buddyEntrance .6s cubic-bezier(.34,1.56,.64,1) forwards; }
+#buddyFigImg.emotion-happy   { animation: buddyHappy .6s ease 2, buddyBob 3s ease-in-out 1.2s infinite; filter: brightness(1.1) saturate(1.2); }
 #buddySpeechBubble {
   position: absolute; bottom: 90px; right: -10px;
   background: var(--card); border: 1.5px solid var(--primary-mid);
